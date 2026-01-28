@@ -1,3 +1,5 @@
+> ⚠️ **Work in Progress**: This repository is currently under active development. Features and documentation may be incomplete or subject to change.
+
 # Self-Managed Plumber
 
 [![CI](https://github.com/getplumber/platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/getplumber/platform/actions/workflows/ci.yml)
