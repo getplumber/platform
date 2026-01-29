@@ -2,8 +2,8 @@ apiVersion: v2
 name: plumber
 description: Helm chart for Plumber
 type: application
-version: "0.1.6"
-appVersion: "0.1.6"
+version: "0.1.7"
+appVersion: "0.1.7"
 home: https://github.com/getplumber/platform/
 maintainers:
   - name: devpro
