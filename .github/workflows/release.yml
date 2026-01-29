@@ -28,7 +28,7 @@ jobs:
       - name: Add dependency chart repositories
         run: ./scripts/add_helm_repo.sh
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.1
+        uses: helm/chart-releaser-action@v1.8.1
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
