@@ -9,7 +9,7 @@ front:
   type: frontend
   name: plumber-front
   image: docker.io/getplumber/frontend
-  tag: v2.32.1
+  tag: v2.32.2
   replicaCount: 1
   revisionHistoryLimit: 5
   port: 3000
