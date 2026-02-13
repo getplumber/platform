@@ -1,19 +1,21 @@
 name: "plumber-local"
 
 x-backend-common: &backend-common
-    image: docker.io/getplumber/backend:$BACKEND_IMAGE_TAG
+    image: docker.io/getplumber/backend:${BACKEND_IMAGE_TAG}
     env_file: .env
     environment:
       - JOBS_LISTEN_ADDR=0.0.0.0
       - JOBS_LISTEN_PORT=3000
-      - JOBS_CORS_ORIGIN=http://$FRONTEND_DOMAIN
-      - JOBS_FRONTEND_URL=http://$FRONTEND_DOMAIN
+      - JOBS_CORS_ORIGIN=http://localhost:3000
+      - JOBS_FRONTEND_URL=http://localhost:3000
       - JOBS_SESSION_TTL=168h
-      - JOBS_DB_HOST=postgres
-      - JOBS_DB_PORT=5432
-      - JOBS_DB_SSLMODE=disable
-      - JOBS_DB_TIMEZONE=Europe/Paris
-      - JOBS_API_DOMAIN=$API_DOMAIN$API_PATH
+      - JOBS_DB_HOST=${JOBS_DB_HOST:-postgres}
+      - JOBS_DB_PORT=${JOBS_DB_PORT:-5432}
+      - JOBS_DB_USER=${JOBS_DB_USER:-jobs}
+      - JOBS_DB_NAME=${JOBS_DB_NAME:-jobs}
+      - JOBS_DB_SSLMODE=${JOBS_DB_SSLMODE:-disable}
+      - JOBS_DB_TIMEZONE=${JOBS_DB_TIMEZONE:-Europe/Paris}
+      - JOBS_API_DOMAIN=http://localhost:3001/api
       - LOG_LEVEL=info
       - LOG_FORMATTER=text
       - JOBS_REDIS_HOST=redis
@@ -22,6 +24,9 @@ x-backend-common: &backend-common
       - JOBS_REDIS_USER=default
       - JOBS_REDIS_SET_NAMESPACES_TTL=30s
       - GITLEAKS_PATH=/opt/gitleaks
+      - FRONTEND_DOMAIN=localhost:3000
+      - API_DOMAIN=http://localhost:3001
+      - API_PATH=/api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -40,8 +45,12 @@ services:
   ############
 
   frontend:
-    image: docker.io/getplumber/frontend:$FRONTEND_IMAGE_TAG
+    image: docker.io/getplumber/frontend:${FRONTEND_IMAGE_TAG}
     env_file: .env
+    environment:
+      - FRONTEND_DOMAIN=localhost:3000
+      - API_DOMAIN=http://localhost:3001
+      - API_PATH=/api
     restart: unless-stopped
     volumes:
       - ./.docker/ca-certificates:/usr/local/share/ca-certificates/
@@ -74,7 +83,7 @@ services:
     env_file: .env
     command:
       - redis-server
-      - --requirepass $JOBS_REDIS_PASSWORD
+      - --requirepass ${JOBS_REDIS_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$JOBS_REDIS_PASSWORD\" ping"]
       interval: 5s
@@ -94,9 +103,9 @@ services:
       - postgres-data:/var/lib/postgresql
     env_file: .env
     environment:
-      - POSTGRES_USER=$JOBS_DB_USER
-      - POSTGRES_PASSWORD=$JOBS_DB_PASSWORD
-      - POSTGRES_DB=$JOBS_DB_NAME
+      - POSTGRES_USER=${JOBS_DB_USER:-jobs}
+      - POSTGRES_PASSWORD=${JOBS_DB_PASSWORD}
+      - POSTGRES_DB=${JOBS_DB_NAME:-jobs}
       - PGDATA=/var/lib/postgresql/18/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 -p 5432"]
