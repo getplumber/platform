@@ -17,5 +17,3 @@ Two installation methods:
 You are welcome to help us improve this repository!
 
 🎮 Open an Issue or create Pull Requests from your fork
-
-For the [Helm chart](charts/plumber/README.md), there is a dedicated [contributing page](charts/plumber/CONTIBUTING.md).
