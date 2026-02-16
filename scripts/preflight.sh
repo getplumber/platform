@@ -7,6 +7,8 @@
 #   ./scripts/preflight.sh              # Run all checks (pre-config + post-config)
 #   ./scripts/preflight.sh --pre        # Run only pre-config checks (no .env needed)
 #   ./scripts/preflight.sh --post       # Run only post-config checks (.env required)
+#   ./scripts/preflight.sh --pre --local  # Pre-config for local dev (ports 3000/3001)
+#   ./scripts/preflight.sh --post --local # Post-config for local dev (skip domain/TLS)
 #
 # Exit codes:
 #   0 = all checks passed
@@ -21,6 +23,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 ERRORS=0
+LOCAL_MODE=false
 
 pass() {
     echo -e "  ${GREEN}✓${NC} $1"
@@ -84,8 +87,13 @@ run_pre_checks() {
         fail "OpenSSL is not installed (needed to generate secrets)"
     fi
 
-    # Check ports 80 and 443 are available
-    for PORT in 80 443; do
+    # Check required ports are available
+    if [ "$LOCAL_MODE" = true ]; then
+        CHECK_PORTS="3000 3001"
+    else
+        CHECK_PORTS="80 443"
+    fi
+    for PORT in $CHECK_PORTS; do
         if command -v ss &> /dev/null; then
             if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
                 fail "Port ${PORT} is already in use"
@@ -125,7 +133,11 @@ run_post_checks() {
     set +a
 
     # Check required variables are set and non-empty
-    REQUIRED_VARS="DOMAIN_NAME JOBS_GITLAB_URL GITLAB_OAUTH2_CLIENT_ID GITLAB_OAUTH2_CLIENT_SECRET SECRET_KEY JOBS_DB_PASSWORD JOBS_REDIS_PASSWORD COMPOSE_PROFILES"
+    if [ "$LOCAL_MODE" = true ]; then
+        REQUIRED_VARS="JOBS_GITLAB_URL GITLAB_OAUTH2_CLIENT_ID GITLAB_OAUTH2_CLIENT_SECRET SECRET_KEY JOBS_DB_PASSWORD JOBS_REDIS_PASSWORD"
+    else
+        REQUIRED_VARS="DOMAIN_NAME JOBS_GITLAB_URL GITLAB_OAUTH2_CLIENT_ID GITLAB_OAUTH2_CLIENT_SECRET SECRET_KEY JOBS_DB_PASSWORD JOBS_REDIS_PASSWORD COMPOSE_PROFILES"
+    fi
     for VAR in $REQUIRED_VARS; do
         VALUE="${!VAR:-}"
         if [ -z "$VALUE" ]; then
@@ -147,40 +159,54 @@ run_post_checks() {
         fi
     done
 
-    # Check COMPOSE_PROFILES is valid
-    PROFILES="${COMPOSE_PROFILES:-}"
-    if [ -n "$PROFILES" ]; then
-        HAS_TRAEFIK=false
-        if echo "$PROFILES" | grep -q "letsencrypt"; then
-            HAS_TRAEFIK=true
+    # Production-only checks
+    if [ "$LOCAL_MODE" = false ]; then
+        # Check COMPOSE_PROFILES is valid
+        PROFILES="${COMPOSE_PROFILES:-}"
+        if [ -n "$PROFILES" ]; then
+            HAS_TRAEFIK=false
+            if echo "$PROFILES" | grep -q "letsencrypt"; then
+                HAS_TRAEFIK=true
+            fi
+            if echo "$PROFILES" | grep -q "custom-certs"; then
+                HAS_TRAEFIK=true
+            fi
+            if [ "$HAS_TRAEFIK" = false ]; then
+                fail "COMPOSE_PROFILES must include 'letsencrypt' or 'custom-certs'"
+            else
+                pass "COMPOSE_PROFILES has a valid traefik profile"
+            fi
         fi
-        if echo "$PROFILES" | grep -q "custom-certs"; then
-            HAS_TRAEFIK=true
-        fi
-        if [ "$HAS_TRAEFIK" = false ]; then
-            fail "COMPOSE_PROFILES must include 'letsencrypt' or 'custom-certs'"
-        else
-            pass "COMPOSE_PROFILES has a valid traefik profile"
-        fi
-    fi
 
-    # Check DNS resolution for DOMAIN_NAME
-    DOMAIN="${DOMAIN_NAME:-}"
-    if [ -n "$DOMAIN" ]; then
-        if command -v dig &> /dev/null; then
-            if dig +short "$DOMAIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
-                pass "DNS resolves for ${DOMAIN}"
+        # Check DNS resolution for DOMAIN_NAME
+        DOMAIN="${DOMAIN_NAME:-}"
+        if [ -n "$DOMAIN" ]; then
+            if command -v dig &> /dev/null; then
+                if dig +short "$DOMAIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+                    pass "DNS resolves for ${DOMAIN}"
+                else
+                    fail "DNS does not resolve for ${DOMAIN} (ensure your DNS record is configured)"
+                fi
+            elif command -v nslookup &> /dev/null; then
+                if nslookup "$DOMAIN" &> /dev/null; then
+                    pass "DNS resolves for ${DOMAIN}"
+                else
+                    fail "DNS does not resolve for ${DOMAIN} (ensure your DNS record is configured)"
+                fi
             else
-                warn "DNS does not resolve for ${DOMAIN} (ensure your DNS record is configured)"
+                warn "Cannot check DNS (install dig or nslookup)"
             fi
-        elif command -v nslookup &> /dev/null; then
-            if nslookup "$DOMAIN" &> /dev/null; then
-                pass "DNS resolves for ${DOMAIN}"
+        fi
+
+        # Check custom cert files exist if custom-certs profile is active
+        if echo "${COMPOSE_PROFILES:-}" | grep -q "custom-certs"; then
+            if [ -f .docker/traefik/certs/plumber_fullchain.pem ] && [ -f .docker/traefik/certs/plumber_privkey.pem ]; then
+                pass "Custom certificate files found"
             else
-                warn "DNS does not resolve for ${DOMAIN} (ensure your DNS record is configured)"
+                fail "Custom certificates profile is active but cert files are missing"
+                echo -e "      Expected: .docker/traefik/certs/plumber_fullchain.pem"
+                echo -e "      Expected: .docker/traefik/certs/plumber_privkey.pem"
             fi
-        else
-            warn "Cannot check DNS (install dig or nslookup)"
         fi
     fi
 
@@ -193,31 +219,27 @@ run_post_checks() {
             warn "Cannot reach GitLab at ${GITLAB_URL} (check URL and network)"
         fi
     fi
-
-    # Check custom cert files exist if custom-certs profile is active
-    if echo "${COMPOSE_PROFILES:-}" | grep -q "custom-certs"; then
-        if [ -f .docker/traefik/certs/plumber_fullchain.pem ] && [ -f .docker/traefik/certs/plumber_privkey.pem ]; then
-            pass "Custom certificate files found"
-        else
-            fail "Custom certificates profile is active but cert files are missing"
-            echo -e "      Expected: .docker/traefik/certs/plumber_fullchain.pem"
-            echo -e "      Expected: .docker/traefik/certs/plumber_privkey.pem"
-        fi
-    fi
 }
 
 # =============================================================================
 # Main
 # =============================================================================
 
-# Determine which checks to run based on arguments
-MODE="${1:-all}"
+# Parse arguments
+MODE="all"
+for ARG in "$@"; do
+    case "$ARG" in
+        --pre) MODE="pre" ;;
+        --post) MODE="post" ;;
+        --local) LOCAL_MODE=true ;;
+    esac
+done
 
 case "$MODE" in
-    --pre)
+    pre)
         run_pre_checks
         ;;
-    --post)
+    post)
         run_post_checks
         ;;
     *)
