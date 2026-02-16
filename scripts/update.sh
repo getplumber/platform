@@ -133,6 +133,11 @@ if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
         case "$REPLY" in
             [yY][eE][sS]|[yY])
                 set_env_var "COMPOSE_PROFILES" "${DETECTED_PROFILES}"
+                if [ "$DETECTED_CERT" = "letsencrypt" ]; then
+                    set_env_var "CERT_RESOLVER" "le"
+                else
+                    set_env_var "CERT_RESOLVER" ""
+                fi
                 echo -e "${GREEN}✓${NC} COMPOSE_PROFILES=${DETECTED_PROFILES} added to .env"
                 break
                 ;;
@@ -148,14 +153,15 @@ if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
                     echo -ne "${BOLD}Choice${NC} ${DIM}(1-4)${NC}: "
                     read -r CHOICE
                     case "$CHOICE" in
-                        1) PROFILES="letsencrypt,internal-db"; break ;;
-                        2) PROFILES="custom-certs,internal-db"; break ;;
-                        3) PROFILES="letsencrypt"; break ;;
-                        4) PROFILES="custom-certs"; break ;;
+                        1) PROFILES="letsencrypt,internal-db"; RESOLVER="le"; break ;;
+                        2) PROFILES="custom-certs,internal-db"; RESOLVER=""; break ;;
+                        3) PROFILES="letsencrypt"; RESOLVER="le"; break ;;
+                        4) PROFILES="custom-certs"; RESOLVER=""; break ;;
                         *) echo -e "${RED}  Please enter a number between 1 and 4.${NC}" ;;
                     esac
                 done
                 set_env_var "COMPOSE_PROFILES" "${PROFILES}"
+                set_env_var "CERT_RESOLVER" "${RESOLVER}"
                 echo -e "${GREEN}✓${NC} COMPOSE_PROFILES=${PROFILES} added to .env"
                 break
                 ;;
@@ -164,6 +170,17 @@ if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
                 ;;
         esac
     done
+fi
+
+# Ensure CERT_RESOLVER is set (derive from COMPOSE_PROFILES if missing)
+if ! grep -q "^CERT_RESOLVER=" .env 2>/dev/null; then
+    source .env
+    if echo "${COMPOSE_PROFILES:-}" | grep -q "letsencrypt"; then
+        set_env_var "CERT_RESOLVER" "le"
+    else
+        set_env_var "CERT_RESOLVER" ""
+    fi
+    echo -e "${GREEN}✓${NC} CERT_RESOLVER added to .env"
 fi
 
 # =============================================================================
