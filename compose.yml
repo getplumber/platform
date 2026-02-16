@@ -63,7 +63,7 @@ services:
       - "traefik.http.routers.front.rule=Host(`${DOMAIN_NAME}`)"
       - "traefik.http.routers.front.entrypoints=websecure"
       - "traefik.http.routers.front.tls=true"
-      - "traefik.http.routers.front.tls.certresolver=le"
+      - "traefik.http.routers.front.tls.certresolver=${CERT_RESOLVER:-}"
     networks:
       - intranet
 
@@ -76,7 +76,7 @@ services:
       - "traefik.http.routers.api.rule=Host(`${DOMAIN_NAME}`)&&PathPrefix(`/api`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls=true"
-      - "traefik.http.routers.api.tls.certresolver=le"
+      - "traefik.http.routers.api.tls.certresolver=${CERT_RESOLVER:-}"
 
   worker:
     <<: *backend-common

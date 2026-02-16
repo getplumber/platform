@@ -253,8 +253,10 @@ prompt_choice CERT_CHOICE "TLS certificate method:" \
 
 if [ "$CERT_CHOICE" = "1" ]; then
     CERT_PROFILE="letsencrypt"
+    CERT_RESOLVER="le"
 else
     CERT_PROFILE="custom-certs"
+    CERT_RESOLVER=""
     echo ""
     echo -e "${DIM}Place your certificate files at:${NC}"
     echo "  .docker/traefik/certs/plumber_fullchain.pem"
@@ -355,6 +357,7 @@ JOBS_REDIS_PASSWORD="${JOBS_REDIS_PASSWORD}"
 
 # Deployment profile
 COMPOSE_PROFILES="${COMPOSE_PROFILES}"
+CERT_RESOLVER="${CERT_RESOLVER}"
 
 # Image versions (managed by scripts/update.sh)
 FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG}"
