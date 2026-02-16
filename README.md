@@ -7,10 +7,13 @@ This project contains resources to setup a self-managed instance of [Plumber](ht
 
 ## Installation
 
-Two installation methods:
+- 🐳 **Docker Compose** — [Documentation](https://getplumber.io/docs/installation/docker-compose/)
 
-- 🐳 [Docker compose](https://getplumber.io/docs/installation/docker-compose/)
-- ☸️ [Kubernetes with Helm](https://getplumber.io/docs/installation/kubernetes/)
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/getplumber/platform/main/install.sh | bash
+  ```
+
+- ☸️ **Kubernetes with Helm** — [Documentation](https://getplumber.io/docs/installation/kubernetes/)
 
 ## Contributions
 
