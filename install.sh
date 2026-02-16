@@ -284,10 +284,16 @@ else
     echo ""
     prompt JOBS_DB_HOST "Database host"
     prompt_optional JOBS_DB_PORT "Database port" "5432"
-    prompt_optional JOBS_DB_USER "Database user" "jobs"
-    prompt_optional JOBS_DB_NAME "Database name" "jobs"
+    prompt JOBS_DB_USER "Database user"
+    prompt_optional JOBS_DB_NAME "Database name" "plumber"
+    prompt_secret JOBS_DB_PASSWORD_EXT "Database password"
+    echo ""
+    echo -e "${DIM}SSL mode options: disable, require, verify-ca${NC}"
     prompt_optional JOBS_DB_SSLMODE "SSL mode" "disable"
-    prompt_optional JOBS_DB_TIMEZONE "Timezone" "Europe/Paris"
+
+    # Detect server timezone
+    SERVER_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "UTC")
+    prompt_optional JOBS_DB_TIMEZONE "Timezone" "${SERVER_TZ}"
 
     EXT_DB_VARS=$(cat <<EXTDB
 
@@ -313,7 +319,11 @@ echo "────────────────────────�
 echo "Generating secrets..."
 
 SECRET_KEY=$(openssl rand -hex 32)
-JOBS_DB_PASSWORD=$(openssl rand -hex 16)
+if [ -z "${JOBS_DB_PASSWORD_EXT:-}" ]; then
+    JOBS_DB_PASSWORD=$(openssl rand -hex 16)
+else
+    JOBS_DB_PASSWORD="${JOBS_DB_PASSWORD_EXT}"
+fi
 JOBS_REDIS_PASSWORD=$(openssl rand -hex 16)
 
 echo -e "${GREEN}✓${NC} Secrets generated"
