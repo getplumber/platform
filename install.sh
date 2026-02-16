@@ -267,6 +267,32 @@ else
     else
         echo -e "  ${YELLOW}!${NC} Certificate files not found yet (add them before starting)"
     fi
+
+    # Custom CA
+    echo ""
+    echo -e "${BOLD}Custom Certificate Authority${NC}"
+    echo ""
+    echo -e "${DIM}If your GitLab instance or your Plumber certificates are signed by${NC}"
+    echo -e "${DIM}a custom Certificate Authority (private CA), Plumber needs the root${NC}"
+    echo -e "${DIM}CA certificate to trust those connections.${NC}"
+    echo ""
+
+    if prompt_confirm "Are you using a custom CA?" "N"; then
+        echo ""
+        echo "  Add your root CA certificate file (.pem or .crt) to:"
+        echo ""
+        echo -e "     ${BOLD}.docker/ca-certificates/${NC}"
+        echo ""
+
+        mkdir -p .docker/ca-certificates
+
+        CA_FILES=$(find .docker/ca-certificates -maxdepth 1 -type f \( -name "*.pem" -o -name "*.crt" \) 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$CA_FILES" -gt 0 ]; then
+            echo -e "  ${GREEN}✓${NC} Found ${CA_FILES} CA certificate(s) in .docker/ca-certificates/"
+        else
+            echo -e "  ${YELLOW}!${NC} No CA certificates found yet (add them before starting)"
+        fi
+    fi
 fi
 
 # Database
