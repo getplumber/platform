@@ -198,14 +198,53 @@ run_post_checks() {
             fi
         fi
 
-        # Check custom cert files exist if custom-certs profile is active
+        # Check custom cert files if custom-certs profile is active
         if echo "${COMPOSE_PROFILES:-}" | grep -q "custom-certs"; then
-            if [ -f .docker/traefik/certs/plumber_fullchain.pem ] && [ -f .docker/traefik/certs/plumber_privkey.pem ]; then
+            CERT_DIR=".docker/traefik/certs"
+            FULLCHAIN="${CERT_DIR}/plumber_fullchain.pem"
+            PRIVKEY="${CERT_DIR}/plumber_privkey.pem"
+
+            if [ -f "$FULLCHAIN" ] && [ -f "$PRIVKEY" ]; then
                 pass "Custom certificate files found"
+
+                # Validate certificate is a valid PEM
+                if openssl x509 -in "$FULLCHAIN" -noout 2>/dev/null; then
+                    pass "Certificate ${FULLCHAIN} is a valid PEM"
+                else
+                    fail "Certificate ${FULLCHAIN} is not a valid PEM file"
+                fi
+
+                # Validate private key is a valid PEM
+                if openssl rsa -in "$PRIVKEY" -check -noout >/dev/null 2>&1 || openssl ec -in "$PRIVKEY" -check -noout >/dev/null 2>&1; then
+                    pass "Private key ${PRIVKEY} is valid"
+                else
+                    fail "Private key ${PRIVKEY} is not a valid PEM key file"
+                fi
             else
                 fail "Custom certificates profile is active but cert files are missing"
-                echo -e "      Expected: .docker/traefik/certs/plumber_fullchain.pem"
-                echo -e "      Expected: .docker/traefik/certs/plumber_privkey.pem"
+                echo -e "      Expected: ${FULLCHAIN}"
+                echo -e "      Expected: ${PRIVKEY}"
+            fi
+
+            # Check custom CA certificates
+            CA_DIR=".docker/ca-certificates"
+            if [ -d "$CA_DIR" ]; then
+                CA_COUNT=$(find "$CA_DIR" -maxdepth 1 -type f \( -name "*.pem" -o -name "*.crt" \) 2>/dev/null | wc -l | tr -d ' ')
+                if [ "$CA_COUNT" -gt 0 ]; then
+                    pass "Found ${CA_COUNT} custom CA certificate(s) in ${CA_DIR}/"
+                    for CA_FILE in "$CA_DIR"/*.pem "$CA_DIR"/*.crt; do
+                        [ -f "$CA_FILE" ] || continue
+                        if openssl x509 -in "$CA_FILE" -noout 2>/dev/null; then
+                            pass "CA certificate $(basename "$CA_FILE") is a valid PEM"
+                        else
+                            fail "CA certificate $(basename "$CA_FILE") is not a valid PEM file"
+                        fi
+                    done
+                else
+                    fail "No CA certificates found in ${CA_DIR}/ (add .pem or .crt files if using a custom CA)"
+                fi
+            else
+                fail "Directory ${CA_DIR}/ does not exist (create it and add CA certs if using a custom CA)"
             fi
         fi
     fi
@@ -216,7 +255,7 @@ run_post_checks() {
         if curl -sf --max-time 10 "${GITLAB_URL}" -o /dev/null 2>/dev/null; then
             pass "GitLab instance is reachable at ${GITLAB_URL}"
         else
-            warn "Cannot reach GitLab at ${GITLAB_URL} (check URL and network)"
+            fail "Cannot reach GitLab at ${GITLAB_URL} (check URL and network)"
         fi
     fi
 }
