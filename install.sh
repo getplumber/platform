@@ -440,7 +440,7 @@ SECRET_KEY="${SECRET_KEY}"
 JOBS_DB_PASSWORD="${JOBS_DB_PASSWORD}"
 JOBS_REDIS_PASSWORD="${JOBS_REDIS_PASSWORD}"
 
-# Image versions (managed by scripts/update.sh)
+# Image versions (managed by versions.env)
 FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG}"
 BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}"
 ENV
@@ -470,7 +470,7 @@ JOBS_REDIS_PASSWORD="${JOBS_REDIS_PASSWORD}"
 COMPOSE_PROFILES="${COMPOSE_PROFILES}"
 CERT_RESOLVER="${CERT_RESOLVER}"
 
-# Image versions (managed by scripts/update.sh)
+# Image versions (managed by versions.env)
 FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG}"
 BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}"
 ${EXT_DB_VARS}

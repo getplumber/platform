@@ -7,10 +7,11 @@
 #   ./scripts/update.sh
 #
 # This script:
-#   1. Pulls the latest changes from the git repository
-#   2. Syncs image tags from versions.env into .env
-#   3. Migrates old .env format if needed (auto-detects COMPOSE_PROFILES)
-#   4. Restarts containers with the new images
+#   1. Stops running containers (using current compose config)
+#   2. Pulls the latest changes from the git repository
+#   3. Loads image tags from versions.env and removes them from .env
+#   4. Migrates old .env format if needed (auto-detects COMPOSE_PROFILES)
+#   5. Starts containers with the new images
 
 set -euo pipefail
 
@@ -53,7 +54,15 @@ echo -e "${BOLD}Updating Plumber...${NC}"
 echo "───────────────────────────────────────"
 
 # =============================================================================
-# Step 1: Pull latest changes
+# Step 1: Stop containers (before pulling, so old compose config is used)
+# =============================================================================
+echo ""
+echo "Stopping containers..."
+docker compose down --remove-orphans
+echo -e "${GREEN}✓${NC} Containers stopped"
+
+# =============================================================================
+# Step 2: Pull latest changes
 # =============================================================================
 echo ""
 echo "Pulling latest changes..."
@@ -61,25 +70,30 @@ git pull
 echo -e "${GREEN}✓${NC} Repository updated"
 
 # =============================================================================
-# Step 2: Sync image tags from versions.env
+# Step 3: Load image tags from versions.env
 # =============================================================================
 echo ""
-echo "Syncing image versions..."
+echo "Loading image versions..."
+set -a
 source versions.env
+set +a
 
 if [ -z "${FRONTEND_IMAGE_TAG:-}" ] || [ -z "${BACKEND_IMAGE_TAG:-}" ]; then
     echo -e "${RED}Error:${NC} versions.env is missing image tags."
     exit 1
 fi
 
-set_env_var "FRONTEND_IMAGE_TAG" "${FRONTEND_IMAGE_TAG}"
-set_env_var "BACKEND_IMAGE_TAG" "${BACKEND_IMAGE_TAG}"
+# Remove image tags from .env if present (versions.env is the source of truth)
+sed -i."" '/^FRONTEND_IMAGE_TAG=/d' .env 2>/dev/null || true
+sed -i."" '/^BACKEND_IMAGE_TAG=/d' .env 2>/dev/null || true
+sed -i."" '/^# Image versions/d' .env 2>/dev/null || true
+rm -f .env."" 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Frontend: ${FRONTEND_IMAGE_TAG}"
 echo -e "${GREEN}✓${NC} Backend:  ${BACKEND_IMAGE_TAG}"
 
 # =============================================================================
-# Step 3: Migrate COMPOSE_PROFILES if missing (old .env format)
+# Step 4: Migrate COMPOSE_PROFILES if missing (old .env format)
 # =============================================================================
 if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
     echo ""
@@ -184,10 +198,10 @@ if ! grep -q "^CERT_RESOLVER=" .env 2>/dev/null; then
 fi
 
 # =============================================================================
-# Step 4: Restart containers
+# Step 5: Start containers with new images
 # =============================================================================
 echo ""
-echo "Restarting containers..."
+echo "Starting containers..."
 docker compose up -d
 
 echo ""
