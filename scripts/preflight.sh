@@ -226,7 +226,7 @@ run_post_checks() {
                 echo -e "      Expected: ${PRIVKEY}"
             fi
 
-            # Check custom CA certificates
+            # Check custom CA certificates (optional, only needed for private CAs)
             CA_DIR=".docker/ca-certificates"
             if [ -d "$CA_DIR" ]; then
                 CA_COUNT=$(find "$CA_DIR" -maxdepth 1 -type f \( -name "*.pem" -o -name "*.crt" \) 2>/dev/null | wc -l | tr -d ' ')
@@ -241,10 +241,10 @@ run_post_checks() {
                         fi
                     done
                 else
-                    fail "No CA certificates found in ${CA_DIR}/ (add .pem or .crt files if using a custom CA)"
+                    warn "No CA certificates in ${CA_DIR}/ (add .pem or .crt files only if using a private CA)"
                 fi
             else
-                fail "Directory ${CA_DIR}/ does not exist (create it and add CA certs if using a custom CA)"
+                pass "No custom CA directory (not needed for publicly-signed certificates)"
             fi
         fi
     fi
