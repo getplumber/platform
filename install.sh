@@ -45,7 +45,7 @@ prompt() {
         VALUE="${VALUE:-$DEFAULT}"
 
         if [ -n "$VALUE" ]; then
-            eval "$VARNAME=\"$VALUE\""
+            printf -v "$VARNAME" '%s' "$VALUE"
             return
         fi
         echo -e "${RED}  This field is required.${NC}"
@@ -79,7 +79,7 @@ prompt_secret() {
         echo ""
 
         if [ -n "$VALUE" ]; then
-            eval "$VARNAME=\"$VALUE\""
+            printf -v "$VARNAME" '%s' "$VALUE"
             return
         fi
         echo -e "${RED}  This field is required.${NC}"
@@ -98,7 +98,11 @@ prompt_optional() {
     fi
     read -r VALUE < /dev/tty
     VALUE="${VALUE:-$DEFAULT}"
-    eval "$VARNAME=\"$VALUE\""
+    printf -v "$VARNAME" '%s' "$VALUE"
+}
+
+env_line() {
+    printf "%s='%s'\n" "$1" "$2"
 }
 
 prompt_choice() {
@@ -117,7 +121,7 @@ prompt_choice() {
         echo -ne "${BOLD}Choice${NC} ${DIM}(1-${NUM_OPTIONS})${NC}: "
         read -r CHOICE < /dev/tty
         if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "$NUM_OPTIONS" ]; then
-            eval "$VARNAME=\"$CHOICE\""
+            printf -v "$VARNAME" '%s' "$CHOICE"
             return
         fi
         echo -e "${RED}  Please enter a number between 1 and ${NUM_OPTIONS}.${NC}"
@@ -292,7 +296,6 @@ prompt GITLAB_OAUTH2_CLIENT_ID "Application ID"
 prompt_secret GITLAB_OAUTH2_CLIENT_SECRET "Secret"
 
 # Certificate method & Database (production only)
-EXT_DB_VARS=""
 
 if [ "$DEPLOY_TYPE" = "1" ]; then
     echo ""
@@ -370,17 +373,6 @@ if [ "$DEPLOY_TYPE" = "1" ]; then
         SERVER_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "UTC")
         prompt_optional JOBS_DB_TIMEZONE "Timezone" "${SERVER_TZ}"
 
-        EXT_DB_VARS=$(cat <<EXTDB
-
-# External database configuration
-JOBS_DB_HOST="${JOBS_DB_HOST}"
-JOBS_DB_PORT="${JOBS_DB_PORT}"
-JOBS_DB_USER="${JOBS_DB_USER}"
-JOBS_DB_NAME="${JOBS_DB_NAME}"
-JOBS_DB_SSLMODE="${JOBS_DB_SSLMODE}"
-JOBS_DB_TIMEZONE="${JOBS_DB_TIMEZONE}"
-EXTDB
-)
     fi
 
     COMPOSE_PROFILES="${CERT_PROFILE}${DB_PROFILE}"
@@ -423,60 +415,73 @@ echo -e "${GREEN}✓${NC} Image versions: frontend=${FRONTEND_IMAGE_TAG}, backen
 
 if [ "$DEPLOY_TYPE" = "2" ]; then
     # Local development .env (simpler, no domain/profiles/cert-resolver)
-    cat > .env <<ENV
+    {
+        cat <<'HEADER'
 ###############################################################################
 # Plumber local configuration file                                            #
 # Documentation: https://getplumber.io/docs/installation/local-docker-compose #
 ###############################################################################
-
-# Main
-JOBS_GITLAB_URL="${JOBS_GITLAB_URL}"
-ORGANIZATION="${ORGANIZATION}"
-
-# GitLab OIDC
-GITLAB_OAUTH2_CLIENT_ID="${GITLAB_OAUTH2_CLIENT_ID}"
-GITLAB_OAUTH2_CLIENT_SECRET="${GITLAB_OAUTH2_CLIENT_SECRET}"
-
-# Secrets
-SECRET_KEY="${SECRET_KEY}"
-JOBS_DB_PASSWORD="${JOBS_DB_PASSWORD}"
-JOBS_REDIS_PASSWORD="${JOBS_REDIS_PASSWORD}"
-
-# Image versions (managed by versions.env)
-FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG}"
-BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}"
-ENV
+HEADER
+        echo ""
+        echo "# Main"
+        env_line JOBS_GITLAB_URL "$JOBS_GITLAB_URL"
+        env_line ORGANIZATION "$ORGANIZATION"
+        echo ""
+        echo "# GitLab OIDC"
+        env_line GITLAB_OAUTH2_CLIENT_ID "$GITLAB_OAUTH2_CLIENT_ID"
+        env_line GITLAB_OAUTH2_CLIENT_SECRET "$GITLAB_OAUTH2_CLIENT_SECRET"
+        echo ""
+        echo "# Secrets"
+        env_line SECRET_KEY "$SECRET_KEY"
+        env_line JOBS_DB_PASSWORD "$JOBS_DB_PASSWORD"
+        env_line JOBS_REDIS_PASSWORD "$JOBS_REDIS_PASSWORD"
+        echo ""
+        echo "# Image versions (managed by versions.env)"
+        env_line FRONTEND_IMAGE_TAG "$FRONTEND_IMAGE_TAG"
+        env_line BACKEND_IMAGE_TAG "$BACKEND_IMAGE_TAG"
+    } > .env
 else
     # Production .env
-    cat > .env <<ENV
+    {
+        cat <<'HEADER'
 ##########################################################################
 # Plumber configuration file                                             #
 # Documentation: https://getplumber.io/docs/installation/docker-compose/ #
 ##########################################################################
-
-# Main configuration
-DOMAIN_NAME="${DOMAIN_NAME}"
-JOBS_GITLAB_URL="${JOBS_GITLAB_URL}"
-ORGANIZATION="${ORGANIZATION}"
-
-# GitLab OIDC
-GITLAB_OAUTH2_CLIENT_ID="${GITLAB_OAUTH2_CLIENT_ID}"
-GITLAB_OAUTH2_CLIENT_SECRET="${GITLAB_OAUTH2_CLIENT_SECRET}"
-
-# Secrets
-SECRET_KEY="${SECRET_KEY}"
-JOBS_DB_PASSWORD="${JOBS_DB_PASSWORD}"
-JOBS_REDIS_PASSWORD="${JOBS_REDIS_PASSWORD}"
-
-# Deployment profile
-COMPOSE_PROFILES="${COMPOSE_PROFILES}"
-CERT_RESOLVER="${CERT_RESOLVER}"
-
-# Image versions (managed by versions.env)
-FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG}"
-BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}"
-${EXT_DB_VARS}
-ENV
+HEADER
+        echo ""
+        echo "# Main configuration"
+        env_line DOMAIN_NAME "$DOMAIN_NAME"
+        env_line JOBS_GITLAB_URL "$JOBS_GITLAB_URL"
+        env_line ORGANIZATION "$ORGANIZATION"
+        echo ""
+        echo "# GitLab OIDC"
+        env_line GITLAB_OAUTH2_CLIENT_ID "$GITLAB_OAUTH2_CLIENT_ID"
+        env_line GITLAB_OAUTH2_CLIENT_SECRET "$GITLAB_OAUTH2_CLIENT_SECRET"
+        echo ""
+        echo "# Secrets"
+        env_line SECRET_KEY "$SECRET_KEY"
+        env_line JOBS_DB_PASSWORD "$JOBS_DB_PASSWORD"
+        env_line JOBS_REDIS_PASSWORD "$JOBS_REDIS_PASSWORD"
+        echo ""
+        echo "# Deployment profile"
+        env_line COMPOSE_PROFILES "$COMPOSE_PROFILES"
+        env_line CERT_RESOLVER "$CERT_RESOLVER"
+        echo ""
+        echo "# Image versions (managed by versions.env)"
+        env_line FRONTEND_IMAGE_TAG "$FRONTEND_IMAGE_TAG"
+        env_line BACKEND_IMAGE_TAG "$BACKEND_IMAGE_TAG"
+        if [ "${DB_CHOICE:-}" = "2" ]; then
+            echo ""
+            echo "# External database configuration"
+            env_line JOBS_DB_HOST "$JOBS_DB_HOST"
+            env_line JOBS_DB_PORT "$JOBS_DB_PORT"
+            env_line JOBS_DB_USER "$JOBS_DB_USER"
+            env_line JOBS_DB_NAME "$JOBS_DB_NAME"
+            env_line JOBS_DB_SSLMODE "$JOBS_DB_SSLMODE"
+            env_line JOBS_DB_TIMEZONE "$JOBS_DB_TIMEZONE"
+        fi
+    } > .env
 fi
 
 echo -e "${GREEN}✓${NC} Configuration written to .env"
