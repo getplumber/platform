@@ -244,8 +244,10 @@ JOBS_GITLAB_URL="${JOBS_GITLAB_URL%/}"
 
 # Organization
 echo ""
-echo -e "${DIM}Leave empty to connect Plumber to the entire GitLab instance.${NC}"
-echo -e "${DIM}Or enter a group path to limit Plumber to that group.${NC}"
+echo -e "${DIM}Leave empty to connect Plumber to the entire GitLab instance${NC}"
+echo -e "${DIM}(requires GitLab instance Admin to run onboarding).${NC}"
+echo -e "${DIM}Or enter a group path to limit Plumber to that group${NC}"
+echo -e "${DIM}(requires at least Maintainer role in the group).${NC}"
 prompt_optional ORGANIZATION "GitLab group path"
 
 # GitLab OIDC

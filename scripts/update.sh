@@ -9,7 +9,7 @@
 # This script:
 #   1. Stops running containers (using current compose config)
 #   2. Pulls the latest changes from the git repository
-#   3. Loads image tags from versions.env and removes them from .env
+#   3. Loads image tags from versions.env and syncs them into .env
 #   4. Migrates old .env format if needed (auto-detects COMPOSE_PROFILES)
 #   5. Starts containers with the new images
 
@@ -49,8 +49,19 @@ set_env_var() {
     fi
 }
 
+# =============================================================================
+# Detect deployment type (local vs production)
+# =============================================================================
+if grep -q "^DOMAIN_NAME=" .env 2>/dev/null; then
+    DEPLOY_TYPE="production"
+    COMPOSE_CMD="docker compose"
+else
+    DEPLOY_TYPE="local"
+    COMPOSE_CMD="docker compose -f compose.local.yml"
+fi
+
 echo ""
-echo -e "${BOLD}Updating Plumber...${NC}"
+echo -e "${BOLD}Updating Plumber (${DEPLOY_TYPE})...${NC}"
 echo "───────────────────────────────────────"
 
 # =============================================================================
@@ -58,7 +69,7 @@ echo "────────────────────────�
 # =============================================================================
 echo ""
 echo "Stopping containers..."
-docker compose down --remove-orphans
+$COMPOSE_CMD down --remove-orphans
 echo -e "${GREEN}✓${NC} Containers stopped"
 
 # =============================================================================
@@ -83,19 +94,17 @@ if [ -z "${FRONTEND_IMAGE_TAG:-}" ] || [ -z "${BACKEND_IMAGE_TAG:-}" ]; then
     exit 1
 fi
 
-# Remove image tags from .env if present (versions.env is the source of truth)
-sed -i."" '/^FRONTEND_IMAGE_TAG=/d' .env 2>/dev/null || true
-sed -i."" '/^BACKEND_IMAGE_TAG=/d' .env 2>/dev/null || true
-sed -i."" '/^# Image versions/d' .env 2>/dev/null || true
-rm -f .env."" 2>/dev/null || true
+# Sync image tags into .env (versions.env is the source of truth)
+set_env_var "FRONTEND_IMAGE_TAG" "${FRONTEND_IMAGE_TAG}"
+set_env_var "BACKEND_IMAGE_TAG" "${BACKEND_IMAGE_TAG}"
 
 echo -e "${GREEN}✓${NC} Frontend: ${FRONTEND_IMAGE_TAG}"
 echo -e "${GREEN}✓${NC} Backend:  ${BACKEND_IMAGE_TAG}"
 
 # =============================================================================
-# Step 4: Migrate COMPOSE_PROFILES if missing (old .env format)
+# Step 4: Migrate COMPOSE_PROFILES if missing (old .env format, production only)
 # =============================================================================
-if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
+if [ "$DEPLOY_TYPE" = "production" ] && ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
     echo ""
     echo -e "${YELLOW}Migration required:${NC} COMPOSE_PROFILES is not set in your .env file."
     echo ""
@@ -186,8 +195,8 @@ if ! grep -q "^COMPOSE_PROFILES=" .env 2>/dev/null; then
     done
 fi
 
-# Ensure CERT_RESOLVER is set (derive from COMPOSE_PROFILES if missing)
-if ! grep -q "^CERT_RESOLVER=" .env 2>/dev/null; then
+# Ensure CERT_RESOLVER is set (derive from COMPOSE_PROFILES if missing, production only)
+if [ "$DEPLOY_TYPE" = "production" ] && ! grep -q "^CERT_RESOLVER=" .env 2>/dev/null; then
     source .env
     if echo "${COMPOSE_PROFILES:-}" | grep -q "letsencrypt"; then
         set_env_var "CERT_RESOLVER" "le"
@@ -202,7 +211,7 @@ fi
 # =============================================================================
 echo ""
 echo "Starting containers..."
-docker compose up -d
+$COMPOSE_CMD up -d
 
 echo ""
 echo -e "${GREEN}✓ Plumber has been updated successfully!${NC}"
