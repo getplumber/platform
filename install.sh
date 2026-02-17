@@ -41,7 +41,7 @@ prompt() {
         else
             echo -ne "${BOLD}${MESSAGE}${NC}: "
         fi
-        read -r VALUE
+        read -r VALUE < /dev/tty
         VALUE="${VALUE:-$DEFAULT}"
 
         if [ -n "$VALUE" ]; then
@@ -61,8 +61,8 @@ prompt_secret() {
     while true; do
         VALUE=""
         echo -ne "${BOLD}${MESSAGE}${NC}: "
-        stty -echo 2>/dev/null || true
-        while IFS= read -r -n1 CHAR; do
+        stty -echo < /dev/tty 2>/dev/null || true
+        while IFS= read -r -n1 CHAR < /dev/tty; do
             if [[ -z "$CHAR" ]]; then
                 break
             elif [[ "$CHAR" == $'\x7f' ]] || [[ "$CHAR" == $'\b' ]]; then
@@ -75,7 +75,7 @@ prompt_secret() {
                 echo -ne "*"
             fi
         done
-        stty echo 2>/dev/null || true
+        stty echo < /dev/tty 2>/dev/null || true
         echo ""
 
         if [ -n "$VALUE" ]; then
@@ -96,7 +96,7 @@ prompt_optional() {
     else
         echo -ne "${BOLD}${MESSAGE}${NC} ${DIM}(leave empty to skip)${NC}: "
     fi
-    read -r VALUE
+    read -r VALUE < /dev/tty
     VALUE="${VALUE:-$DEFAULT}"
     eval "$VARNAME=\"$VALUE\""
 }
@@ -115,7 +115,7 @@ prompt_choice() {
 
     while true; do
         echo -ne "${BOLD}Choice${NC} ${DIM}(1-${NUM_OPTIONS})${NC}: "
-        read -r CHOICE
+        read -r CHOICE < /dev/tty
         if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "$NUM_OPTIONS" ]; then
             eval "$VARNAME=\"$CHOICE\""
             return
@@ -133,7 +133,7 @@ prompt_confirm() {
     else
         echo -ne "${BOLD}${MESSAGE}${NC} ${DIM}(y/N)${NC}: "
     fi
-    read -r REPLY
+    read -r REPLY < /dev/tty
     REPLY="${REPLY:-$DEFAULT}"
 
     case "$REPLY" in
