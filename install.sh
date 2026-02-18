@@ -174,10 +174,16 @@ if [ ! -f compose.yml ] || [ ! -f versions.env ]; then
         exit 1
     fi
 
-    git clone "$REPO_URL" "$REPO_DIR"
-    cd "$REPO_DIR"
+    if [ -d "$REPO_DIR" ]; then
+        echo "Directory ${REPO_DIR} already exists, updating..."
+        cd "$REPO_DIR"
+        git pull --ff-only || true
+    else
+        git clone "$REPO_URL" "$REPO_DIR"
+        cd "$REPO_DIR"
+    fi
     echo ""
-    echo -e "${GREEN}✓${NC} Repository cloned to $(pwd)"
+    echo -e "${GREEN}✓${NC} Repository ready at $(pwd)"
     echo ""
 fi
 
