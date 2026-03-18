@@ -1,4 +1,6 @@
 #!/bin/bash
+# Fix CRLF line endings (Windows/WSL): must run before 'set' to survive \r
+grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
 # Plumber Pre-flight Checks
 # Validates system requirements and configuration before launching Plumber.

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Fix CRLF line endings (Windows/WSL): must run before 'set' to survive \r
+grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
 # Plumber Update Script
 # Updates your self-managed Plumber instance to the latest version.
@@ -22,6 +24,21 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
+
+fix_crlf() {
+    local fixed=false
+    local file
+    for file in install.sh scripts/*.sh versions.env .env; do
+        if [ -f "$file" ] && grep -q $'\r' "$file" 2>/dev/null; then
+            tr -d '\r' < "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+            fixed=true
+        fi
+    done
+    if [ "$fixed" = true ]; then
+        chmod +x install.sh scripts/*.sh 2>/dev/null || true
+        echo -e "${YELLOW}!${NC} Fixed Windows line endings (CRLF → LF) in script files"
+    fi
+}
 
 # Ensure we're in the repository root
 if [ ! -f compose.yml ] || [ ! -f versions.env ]; then
@@ -79,6 +96,8 @@ echo ""
 echo "Pulling latest changes..."
 git pull
 echo -e "${GREEN}✓${NC} Repository updated"
+
+fix_crlf
 
 # =============================================================================
 # Step 3: Load image tags from versions.env

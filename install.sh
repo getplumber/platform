@@ -1,4 +1,6 @@
 #!/bin/bash
+# Fix CRLF line endings (Windows/WSL): must run before 'set' to survive \r
+grep -q $'\r' "$0" 2>/dev/null && sed -i 's/\r$//' "$0" && exec bash "$0" "$@"
 
 # Plumber Installer
 # Interactive setup wizard for self-managed Plumber instances.
@@ -102,7 +104,22 @@ prompt_optional() {
 }
 
 env_line() {
-    printf "%s='%s'\n" "$1" "$2"
+    printf "%s='%s'\n" "$1" "${2//$'\r'/}"
+}
+
+fix_crlf() {
+    local fixed=false
+    local file
+    for file in install.sh scripts/*.sh versions.env .env; do
+        if [ -f "$file" ] && grep -q $'\r' "$file" 2>/dev/null; then
+            tr -d '\r' < "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+            fixed=true
+        fi
+    done
+    if [ "$fixed" = true ]; then
+        chmod +x install.sh scripts/*.sh 2>/dev/null || true
+        echo -e "${YELLOW}!${NC} Fixed Windows line endings (CRLF → LF) in script files"
+    fi
 }
 
 prompt_choice() {
@@ -186,6 +203,8 @@ if [ ! -f compose.yml ] || [ ! -f versions.env ]; then
     echo -e "${GREEN}✓${NC} Repository ready at $(pwd)"
     echo ""
 fi
+
+fix_crlf
 
 # =============================================================================
 # Step 2: Choose deployment type

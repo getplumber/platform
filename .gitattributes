@@ -1,0 +1,9 @@
+# Force LF line endings for scripts and config files.
+# Prevents CRLF issues when cloning on Windows and running in WSL/Linux.
+*.sh         text eol=lf
+*.env        text eol=lf
+*.env.*      text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+Dockerfile   text eol=lf
+Dockerfile.* text eol=lf
