@@ -258,6 +258,8 @@ echo -e "${DIM}Leave empty to connect Plumber to the entire GitLab instance${NC}
 echo -e "${DIM}(requires GitLab instance Admin to run onboarding).${NC}"
 echo -e "${DIM}Or enter a group path to limit Plumber to that group${NC}"
 echo -e "${DIM}(requires at least Maintainer role in the group).${NC}"
+echo -e "${DIM}On GitLab.com or non-self-hosted instances, use the exact group path as defined in GitLab (the 'full_path'),${NC}"
+echo -e "${DIM}which may differ from the display name and can include a suffix added by GitLab for uniqueness.${NC}"
 prompt_optional ORGANIZATION "GitLab group path"
 
 # GitLab OIDC
