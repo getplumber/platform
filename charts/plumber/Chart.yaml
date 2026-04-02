@@ -14,3 +14,10 @@ maintainers:
     email: thomas@getplumber.io
   - name: Totara-thib
     email: thibaud@getplumber.io
+  - name: Joseph94m
+    email: joseph.moukarzel@jmclarity.com
+dependencies:
+  - name: redis
+    version: "~25"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.deploy

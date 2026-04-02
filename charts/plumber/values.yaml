@@ -260,8 +260,36 @@ postgresql:
       #     adminPasswordKey: "password"
       #     userPasswordKey: "password"
 
-# External Redis
+# Redis
 redis:
+  # -- Set to true to deploy a Redis instance as part of this chart (via bitnami/redis sub-chart).
+  # When false (default), Redis is treated as an external dependency and you must provide connection details below.
+  deploy: false
+
+  # -- Redis architecture when deployed by this chart. Options: "standalone" or "replication".
+  # Keep Standalone for now because we do not support replication yet.
+  architecture: standalone
+
+  # Image configuration (only used when deploy is true).
+  # Override these to pull from a private registry or mirror.
+  # When using a non-bitnami registry, you must also set global.security.allowInsecureImages to true.
+  image:
+  #   registry: my-private-registry.example.com
+  #   repository: bitnami/redis
+  #   tag: "latest"
+    digest: "sha256:98cf67395e80506c7bc21b889107980365558ef30d59059ac6d76aab2678bf7e"
+  #   pullPolicy: IfNotPresent
+  #   pullSecrets:
+  #     - my-registry-secret
+
+  # Persistence for deployed Redis (only used when deploy is true).
+  # Disabled by default — Redis is used as a cache/queue, data loss on restart is acceptable.
+  master:
+    persistence:
+      enabled: false
+
+  # Connection details for the Redis instance (used whether deployed by this chart or external).
+  # When deploy is true and custom.host is empty, the host defaults to the sub-chart's service (<release>-redis-master).
   custom:
     host: ""
     user: "default"
