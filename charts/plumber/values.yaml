@@ -9,8 +9,8 @@ additionalLabels: {}
 imageRegistry: ""
 
 # -- Global image pull secrets for pulling from private registries.
-imagePullSecrets: []
-  # - name: my-registry-secret
+imagePullSecrets: 
+  - name: my-registry-secret
 
 front:
   enabled: true
@@ -19,9 +19,9 @@ front:
   # -- Full image path (used when imageRegistry is empty).
   image: docker.io/getplumber/frontend
   # -- Image name without registry prefix (used when imageRegistry is set).
-  imageName: getplumber/frontend
+  imageName: getplumber/frontenasdd
   # -- Image pull policy for the container.
-  imagePullPolicy: Always
+  imagePullPolicy: ifNotPresent
   tag: v2.34.4
   replicaCount: 1
   revisionHistoryLimit: 5
@@ -83,9 +83,9 @@ backend:
   # -- Full image path (used when imageRegistry is empty).
   image: docker.io/getplumber/backend
   # -- Image name without registry prefix (used when imageRegistry is set).
-  imageName: getplumber/backend
+  imageName: getplumber/backendasdasdasdasdasdasdasdasdasd
   # -- Image pull policy for the container.
-  imagePullPolicy: Always
+  imagePullPolicy: Never
   tag: v2.37.1
   replicaCount: 1
   revisionHistoryLimit: 5
@@ -168,11 +168,11 @@ worker:
   type: backend
   name: plumber-worker
   # -- Full image path (used when imageRegistry is empty).
-  image: docker.io/getplumber/backend
+  image: docker.io/getplumber/backendasdasd
   # -- Image name without registry prefix (used when imageRegistry is set).
-  imageName: getplumber/backend
+  imageName: getplumber/backendasdasd
   # -- Image pull policy for the container.
-  imagePullPolicy: Always
+  imagePullPolicy: ifNotPresent
   tag: v2.37.1
   replicaCount: 5
   revisionHistoryLimit: 5
@@ -262,12 +262,29 @@ postgresql:
 
 # External Redis
 redis:
+  # -- Redis deployment mode: "standalone" for single-node, "sentinel" for Redis Sentinel HA.
+  # Existing single-node deployments are unaffected (default is "standalone").
+  mode: "standalone"
+
   custom:
     host: ""
     user: "default"
     port: 6379
     cert: ""
     databaseIndex: 0
+
+  # Redis Sentinel configuration (only used when mode is "sentinel").
+  sentinel:
+    masterName: "mymaster"
+    nodes: []
+      # - "sentinel1:26379"
+      # - "sentinel2:26379"
+      # - "sentinel3:26379"
+    # -- Password for Sentinel authentication (optional).
+    password: ""
+    # -- Or Use an existing secret for Sentinel password
+    existingSecret: ""
+    existingSecretPasswordKey: "sentinel-password"
 
   # Not using secret for auth (comment if you use secret)
   auth:

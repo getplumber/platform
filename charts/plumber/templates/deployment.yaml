@@ -108,6 +108,8 @@ spec:
               value: "https://{{ default $.Values.front.name $.Values.front.host }}"
             - name: JOBS_CORS_ORIGIN
               value: "https://{{ default $.Values.front.name $.Values.front.host }}"
+            - name: JOBS_REDIS_MODE
+              value: "{{ default "standalone" $.Values.redis.mode }}"
             - name: JOBS_REDIS_HOST
               value: "{{ default (printf "%s-%s" $.Release.Name "redis-master") $.Values.redis.custom.host }}"
             - name: JOBS_REDIS_PORT
@@ -118,6 +120,24 @@ spec:
               value: "{{ $.Values.redis.custom.user }}"
             - name: JOBS_REDIS_SET_NAMESPACES_TTL
               value: "30s"
+
+            {{- if eq (default "standalone" $.Values.redis.mode) "sentinel" }}
+            - name: JOBS_REDIS_SENTINEL_MASTER_NAME
+              value: "{{ $.Values.redis.sentinel.masterName }}"
+            - name: JOBS_REDIS_SENTINEL_NODES
+              value: "{{ join "," $.Values.redis.sentinel.nodes }}"
+            {{- if and (not (empty (default "" $.Values.redis.sentinel.existingSecret))) $.Values.redis.sentinel.existingSecretPasswordKey }}
+            - name: JOBS_REDIS_SENTINEL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ $.Values.redis.sentinel.existingSecret }}"
+                  key: "{{ $.Values.redis.sentinel.existingSecretPasswordKey }}"
+            {{- else if not (empty (default "" $.Values.redis.sentinel.password)) }}
+            - name: JOBS_REDIS_SENTINEL_PASSWORD
+              value: "{{ $.Values.redis.sentinel.password }}"
+            {{- end }}
+            {{- end }}
+
             - name: GITLEAKS_PATH
               value: "/opt/gitleaks"
 
