@@ -20,7 +20,7 @@ tests:
           content:
             name: ca-certificates
             emptyDir:
-              sizeLimit: 1Ki
+              sizeLimit: 1Mi
 
   - it: Deployments should bind to an external secret if .existingSecret is set
     set:

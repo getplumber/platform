@@ -118,6 +118,7 @@ spec:
               value: "{{ $.Values.redis.custom.user }}"
             - name: JOBS_REDIS_SET_NAMESPACES_TTL
               value: "30s"
+
             - name: GITLEAKS_PATH
               value: "/opt/gitleaks"
 
@@ -213,7 +214,7 @@ spec:
             name: {{ .configMapName | default "plumber-ca-certificates" }}
           {{- else }}
           emptyDir:
-            sizeLimit: 1Ki
+            sizeLimit: 1Mi
           {{- end }}
         {{- end }}
 
