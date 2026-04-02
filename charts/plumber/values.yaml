@@ -4,11 +4,24 @@ additionalAnnotations: {}
 # -- Additional labels applied to all resources.
 additionalLabels: {}
 
+# -- Global image registry override. When set, images are pulled as <imageRegistry>/<imageName>:<tag>.
+# Leave empty to use the full path from each component's `image` field (default behavior).
+imageRegistry: ""
+
+# -- Global image pull secrets for pulling from private registries.
+imagePullSecrets: []
+  # - name: my-registry-secret
+
 front:
   enabled: true
   type: frontend
   name: plumber-front
+  # -- Full image path (used when imageRegistry is empty).
   image: docker.io/getplumber/frontend
+  # -- Image name without registry prefix (used when imageRegistry is set).
+  imageName: getplumber/frontend
+  # -- Image pull policy for the container.
+  imagePullPolicy: Always
   tag: v2.34.4
   replicaCount: 1
   revisionHistoryLimit: 5
@@ -67,7 +80,12 @@ backend:
   enabled: true
   type: backend
   name: plumber-backend
+  # -- Full image path (used when imageRegistry is empty).
   image: docker.io/getplumber/backend
+  # -- Image name without registry prefix (used when imageRegistry is set).
+  imageName: getplumber/backend
+  # -- Image pull policy for the container.
+  imagePullPolicy: Always
   tag: v2.37.1
   replicaCount: 1
   revisionHistoryLimit: 5
@@ -149,7 +167,12 @@ worker:
   enabled: true
   type: backend
   name: plumber-worker
+  # -- Full image path (used when imageRegistry is empty).
   image: docker.io/getplumber/backend
+  # -- Image name without registry prefix (used when imageRegistry is set).
+  imageName: getplumber/backend
+  # -- Image pull policy for the container.
+  imagePullPolicy: Always
   tag: v2.37.1
   replicaCount: 5
   revisionHistoryLimit: 5
