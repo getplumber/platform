@@ -2,8 +2,8 @@ apiVersion: v2
 name: plumber
 description: Helm chart for Plumber
 type: application
-version: "1.2.0"
-appVersion: "1.2.0"
+version: "1.3.0"
+appVersion: "1.3.0"
 home: https://github.com/getplumber/platform/
 maintainers:
   - name: devpro
@@ -16,8 +16,3 @@ maintainers:
     email: thibaud@getplumber.io
   - name: Joseph94m
     email: joseph.moukarzel@jmclarity.com
-dependencies:
-  - name: redis
-    version: "~25"
-    repository: https://charts.bitnami.com/bitnami
-    condition: redis.deploy
