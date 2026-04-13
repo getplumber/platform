@@ -1,0 +1,28 @@
+{{- if .Values.redis.deploy }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-redis-master" .Release.Name }}
+  labels:
+    app: {{ printf "%s-redis-master" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+    {{- range $key, $val := .Values.additionalLabels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- range $key, $val := . }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ printf "%s-redis-master" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+{{- end }}

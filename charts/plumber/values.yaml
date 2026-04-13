@@ -262,34 +262,28 @@ postgresql:
 
 # Redis
 redis:
-  # -- Set to true to deploy a Redis instance as part of this chart (via bitnami/redis sub-chart).
-  # When false (default), Redis is treated as an external dependency and you must provide connection details below.
+  # -- Set to true to deploy a Redis instance as part of this chart.
+  # When false, Redis is treated as an external dependency — provide connection details in custom below.
   deploy: false
 
-  # -- Redis architecture when deployed by this chart. Options: "standalone" or "replication".
-  # Keep Standalone for now because we do not support replication yet.
-  architecture: standalone
-
-  # Image configuration (only used when deploy is true).
-  # Override these to pull from a private registry or mirror.
-  # When using a non-bitnami registry, you must also set global.security.allowInsecureImages to true.
+  # Image configuration for the bundled Redis instance (only used when deploy is true).
   image:
-  #   registry: my-private-registry.example.com
-  #   repository: bitnami/redis
-  #   tag: "latest"
-    digest: "sha256:98cf67395e80506c7bc21b889107980365558ef30d59059ac6d76aab2678bf7e"
-  #   pullPolicy: IfNotPresent
-  #   pullSecrets:
-  #     - my-registry-secret
-
-  # Persistence for deployed Redis (only used when deploy is true).
-  # Disabled by default — Redis is used as a cache/queue, data loss on restart is acceptable.
-  master:
-    persistence:
-      enabled: false
+    # -- Optional registry prefix (e.g. my-private-registry.example.com).
+    # When set, the image is pulled as <registry>/<repository>:<tag>.
+    # Leave empty to use repository as-is.
+    registry: ""
+    # -- Image repository. Override to pull from a mirror or private registry.
+    repository: redis
+    # -- Image tag.
+    tag: "8.4"
+    # -- Optional content-addressable digest (sha256:...).
+    # When set, pins the exact image version regardless of tag.
+    digest: ""
+    # -- Pull policy for the Redis image.
+    pullPolicy: IfNotPresent
 
   # Connection details for the Redis instance (used whether deployed by this chart or external).
-  # When deploy is true and custom.host is empty, the host defaults to the sub-chart's service (<release>-redis-master).
+  # When deploy is true and custom.host is empty, the host defaults to <release>-redis-master.
   custom:
     host: ""
     user: "default"
