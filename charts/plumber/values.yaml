@@ -22,7 +22,7 @@ front:
   imageName: getplumber/frontend
   # -- Image pull policy for the container.
   imagePullPolicy: Always
-  tag: v2.34.4
+  tag: v2.34.5
   replicaCount: 1
   revisionHistoryLimit: 5
   port: 3000
