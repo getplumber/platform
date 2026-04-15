@@ -282,6 +282,27 @@ redis:
     # -- Pull policy for the Redis image.
     pullPolicy: IfNotPresent
 
+  # -- Security context for the Redis container.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Security context for the Redis pod.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
   # Connection details for the Redis instance (used whether deployed by this chart or external).
   # When deploy is true and custom.host is empty, the host defaults to <release>-redis-master.
   custom:
