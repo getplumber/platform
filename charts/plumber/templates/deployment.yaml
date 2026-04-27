@@ -40,6 +40,34 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
+      {{- if and (eq .type "backend") $.Values.postgresql.deploy }}
+      initContainers:
+        - name: wait-for-db
+          image: {{ include "plumber.postgresImage" $ }}
+          imagePullPolicy: {{ $.Values.postgresql.image.pullPolicy | default "IfNotPresent" }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"; do
+                echo "Waiting for PostgreSQL at $DB_HOST:$DB_PORT..."
+                sleep 3
+              done
+          env:
+            - name: DB_HOST
+              value: "{{ default (printf "%s-%s" $.Release.Name "postgresql") $.Values.postgresql.custom.host }}"
+            - name: DB_PORT
+              value: "{{ $.Values.postgresql.custom.port }}"
+            - name: DB_USER
+              value: "{{ $.Values.postgresql.global.postgresql.auth.username }}"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+      {{- end }}
       containers:
         - name: {{ .name }}
           image: {{ if $.Values.imageRegistry }}{{ $.Values.imageRegistry }}/{{ .imageName }}{{ else }}{{ .image }}{{ end }}:{{ .tag }}

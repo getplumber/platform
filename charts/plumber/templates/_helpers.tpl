@@ -10,3 +10,16 @@ Produces: [registry/]repository:tag[@digest]
 {{- $base := ternary (printf "%s/%s" $reg $repo) $repo (ne $reg "") -}}
 {{- ternary (printf "%s:%s@%s" $base $tag $dig) (printf "%s:%s" $base $tag) (ne $dig "") -}}
 {{- end }}
+
+{{/*
+Build the PostgreSQL image reference from values.
+Produces: [registry/]repository:tag[@digest]
+*/}}
+{{- define "plumber.postgresImage" -}}
+{{- $reg  := .Values.postgresql.image.registry -}}
+{{- $repo := .Values.postgresql.image.repository -}}
+{{- $tag  := .Values.postgresql.image.tag -}}
+{{- $dig  := .Values.postgresql.image.digest -}}
+{{- $base := ternary (printf "%s/%s" $reg $repo) $repo (ne $reg "") -}}
+{{- ternary (printf "%s:%s@%s" $base $tag $dig) (printf "%s:%s" $base $tag) (ne $dig "") -}}
+{{- end }}

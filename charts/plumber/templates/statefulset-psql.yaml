@@ -1,0 +1,125 @@
+{{- if .Values.postgresql.deploy }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-postgresql" .Release.Name }}
+  labels:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+    {{- range $key, $val := .Values.additionalLabels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- range $key, $val := . }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  clusterIP: None
+  selector:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-postgresql" .Release.Name }}
+  labels:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+    {{- range $key, $val := .Values.additionalLabels }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- range $key, $val := . }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  replicas: 1
+  serviceName: {{ printf "%s-postgresql" .Release.Name }}
+  selector:
+    matchLabels:
+      app: {{ printf "%s-postgresql" .Release.Name }}
+      app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ printf "%s-postgresql" .Release.Name }}
+        app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+        {{- range $key, $val := .Values.additionalLabels }}
+        {{ $key }}: {{ $val | quote }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: {{ .Values.postgresql.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.postgresql.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgresql
+          image: {{ include "plumber.postgresImage" . }}
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.custom.dbName | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.global.postgresql.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              {{- if .Values.postgresql.global.postgresql.auth.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.global.postgresql.auth.existingSecret | quote }}
+                  key: {{ .Values.postgresql.global.postgresql.auth.secretKeys.adminPasswordKey | quote }}
+              {{- else }}
+              value: {{ .Values.postgresql.global.postgresql.auth.postgresPassword | quote }}
+              {{- end }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          {{- with .Values.postgresql.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [{{ .Values.postgresql.persistence.accessMode | quote }}]
+        {{- with .Values.postgresql.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size | quote }}
+{{- end }}

@@ -235,8 +235,61 @@ customCertificateAuthority:
   #     (SNIPPED FOR BREVITY)
   #     -----END CERTIFICATE-----
 
-# External PostgreSQL
+# PostgreSQL
 postgresql:
+  # -- Set to true to deploy a PostgreSQL instance as part of this chart.
+  # When false, PostgreSQL is treated as an external dependency — provide connection details in custom below.
+  deploy: false
+
+  # Image configuration for the bundled PostgreSQL instance (only used when deploy is true).
+  image:
+    # -- Optional registry prefix (e.g. my-private-registry.example.com).
+    # When set, the image is pulled as <registry>/<repository>:<tag>.
+    # Leave empty to use repository as-is.
+    registry: ""
+    # -- Image repository. Override to pull from a mirror or private registry.
+    repository: postgres
+    # -- Image tag.
+    tag: "18"
+    # -- Optional content-addressable digest (sha256:...).
+    # When set, pins the exact image version regardless of tag.
+    digest: ""
+    # -- Pull policy for the PostgreSQL image.
+    pullPolicy: IfNotPresent
+
+  # -- Security context for the PostgreSQL container.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Security context for the PostgreSQL pod.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Persistence configuration for PostgreSQL data (only used when deploy is true).
+  persistence:
+    size: "10Gi"
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+  resources: {}
+
+  automountServiceAccountToken: true
+
+  # Connection details for the PostgreSQL instance (used whether deployed by this chart or external).
+  # When deploy is true and custom.host is empty, the host defaults to <release>-postgresql.
   custom:
     host: ""
     dbName: "plumber"
@@ -302,6 +355,8 @@ redis:
     fsGroup: 999
     seccompProfile:
       type: RuntimeDefault
+
+  resources: {}
 
   # Connection details for the Redis instance (used whether deployed by this chart or external).
   # When deploy is true and custom.host is empty, the host defaults to <release>-redis-master.

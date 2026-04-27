@@ -69,7 +69,8 @@ spec:
               port: redis
             initialDelaySeconds: 5
             periodSeconds: 10
-          resources: {}
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
           {{- with .Values.redis.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
