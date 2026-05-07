@@ -22,7 +22,7 @@ front:
   imageName: getplumber/frontend
   # -- Image pull policy for the container.
   imagePullPolicy: Always
-  tag: v2.34.6
+  tag: v2.34.8
   replicaCount: 1
   revisionHistoryLimit: 5
   port: 3000
@@ -46,6 +46,7 @@ front:
     #   memory: 64Mi
   extraIngressAnnotations: {}
   # -- Security context for front containers.
+  # The frontend image runs as the dedicated non-root user nextjs (uid:gid 1001:1001).
   securityContext:
     # -- Allow privilege escalation within the container.
     allowPrivilegeEscalation: false
@@ -54,17 +55,21 @@ front:
       drop: [ALL]
     # -- Run the container in privileged mode.
     privileged: false
-    # -- Enforce running the container as non-root. Leave `false` until the image is able to be run in rootless mode.
-    runAsNonRoot: false
-    # -- Run the container as the specified user id (uid). Leave `0` until the image is able to be run in rootless mode.
-    runAsUser: 0
-    # -- Run the container as the specified group id (gid). Leave `0` until the image is able to be run in rootless mode.
-    runAsGroup: 0
+    # -- Enforce running the container as non-root.
+    runAsNonRoot: true
+    # -- Run the container as the specified user id (uid). Frontend image bakes uid 1001 (nextjs).
+    runAsUser: 1001
+    # -- Run the container as the specified group id (gid). Frontend image bakes gid 1001 (nodejs).
+    runAsGroup: 1001
     seccompProfile:
       # -- The Seccomp profile to apply to this container.
       type: RuntimeDefault
   # -- Optional security context for pods.
-  podSecurityContext: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
   automountServiceAccountToken: true
 
   # NodeSelector is a selector which must be true for the pod to fit on a node.
@@ -86,7 +91,7 @@ backend:
   imageName: getplumber/backend
   # -- Image pull policy for the container.
   imagePullPolicy: Always
-  tag: v2.40.0
+  tag: v2.40.1
   replicaCount: 1
   revisionHistoryLimit: 5
   port: 3000
@@ -102,6 +107,7 @@ backend:
   serviceAccountName: ""
   extraIngressAnnotations: {}
   # -- Security context for backend containers.
+  # The backend image is distroless and runs as the rootless user nonroot (uid:gid 65532:65532).
   securityContext:
     # -- Allow privilege escalation within the container.
     allowPrivilegeEscalation: false
@@ -110,17 +116,21 @@ backend:
       drop: [ALL]
     # -- Run the container in privileged mode.
     privileged: false
-    # -- Enforce running the container as non-root. Leave `false` until the image is able to be run in rootless mode.
-    runAsNonRoot: false
-    # -- Run the container as the specified user id (uid). Leave `0` until the image is able to be run in rootless mode.
-    runAsUser: 0
-    # -- Run the container as the specified group id (gid). Leave `0` until the image is able to be run in rootless mode.
-    runAsGroup: 0
+    # -- Enforce running the container as non-root.
+    runAsNonRoot: true
+    # -- Run the container as the specified user id (uid). Distroless bakes uid 65532 (nonroot).
+    runAsUser: 65532
+    # -- Run the container as the specified group id (gid). Distroless bakes gid 65532 (nonroot).
+    runAsGroup: 65532
     seccompProfile:
       # -- The Seccomp profile to apply to this container.
       type: RuntimeDefault
   # -- Optional security context for pods.
-  podSecurityContext: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
   automountServiceAccountToken: true
 
   # NodeSelector is a selector which must be true for the pod to fit on a node.
@@ -173,7 +183,7 @@ worker:
   imageName: getplumber/backend
   # -- Image pull policy for the container.
   imagePullPolicy: Always
-  tag: v2.40.0
+  tag: v2.40.1
   replicaCount: 5
   revisionHistoryLimit: 5
   args:
@@ -189,6 +199,7 @@ worker:
   serviceAccountName: ""
   automountServiceAccountToken: true
   # -- Security context for worker containers.
+  # Worker uses the same distroless image as the backend (uid:gid 65532:65532).
   securityContext:
     # -- Allow privilege escalation within the container.
     allowPrivilegeEscalation: false
@@ -197,17 +208,21 @@ worker:
       drop: [ALL]
     # -- Run the container in privileged mode.
     privileged: false
-    # -- Enforce running the container as non-root. Leave `false` until the image is able to be run in rootless mode.
-    runAsNonRoot: false
-    # -- Run the container as the specified user id (uid). Leave `0` until the image is able to be run in rootless mode.
-    runAsUser: 0
-    # -- Run the container as the specified group id (gid). Leave `0` until the image is able to be run in rootless mode.
-    runAsGroup: 0
+    # -- Enforce running the container as non-root.
+    runAsNonRoot: true
+    # -- Run the container as the specified user id (uid). Distroless bakes uid 65532 (nonroot).
+    runAsUser: 65532
+    # -- Run the container as the specified group id (gid). Distroless bakes gid 65532 (nonroot).
+    runAsGroup: 65532
     seccompProfile:
       # -- The Seccomp profile to apply to this container.
       type: RuntimeDefault
   # -- Optional security context for pods.
-  podSecurityContext: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
 
   # NodeSelector is a selector which must be true for the pod to fit on a node.
   # Selector which must match a node's labels for the pod to be scheduled on that node.

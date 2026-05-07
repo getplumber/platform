@@ -92,6 +92,9 @@ metadata:
     traefik.http.routers.api.entrypoints: websecure
     traefik.http.routers.api.tls: true
     traefik.http.routers.api.tls.certresolver: le
+    # Pin Traefik to the API port; the pod also exposes 9090 for metrics, which
+    # Traefik must not pick by mistake.
+    traefik.http.services.api.loadbalancer.server.port: "3000"
 spec:
   initContainers:
   - name: wait-for-services
@@ -104,9 +107,10 @@ spec:
   containers:
   - name: backend
     image: docker.io/getplumber/backend:${BACKEND_IMAGE_TAG}
+    # Backend listens on a non-privileged port (3000) so the image can run rootless.
     ports:
-    - containerPort: 80
-      hostPort: 81
+    - containerPort: 3000
+      hostPort: 3001
     - containerPort: 9090
     envFrom:
     - configMapRef:
@@ -150,9 +154,10 @@ spec:
         args:
         - "until echo 'Waiting for postgres...' && nc -vz -w 2 postgres 5432 && echo 'Waiting for redis...' && nc -vz -w 2 redis 6379; do echo 'Looping forever...'; sleep 2; done;"
       containers:
+      # Distroless image: invoke the binary directly with --worker (no shell available).
       - name: workers
         image: docker.io/getplumber/backend:${BACKEND_IMAGE_TAG}
-    args: ["--worker"]
+        args: ["--worker"]
         ports:
         - containerPort: 9090
         envFrom:
