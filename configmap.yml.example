@@ -9,7 +9,9 @@ metadata:
   name: plumber-backend
 data:
   JOBS_LISTEN_ADDR: 0.0.0.0
-  JOBS_LISTEN_PORT: 80
+  # Use a non-privileged port (>=1024) so the backend can run rootless.
+  # Must match the containerPort in podman.yml.example.
+  JOBS_LISTEN_PORT: 3000
   JOBS_CORS_ORIGIN: https://${DOMAIN_NAME}
   JOBS_FRONTEND_URL: https://${DOMAIN_NAME}
   JOBS_SESSION_TTL: 168h

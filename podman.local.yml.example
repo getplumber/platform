@@ -91,9 +91,10 @@ spec:
     args:
     - "until echo 'Waiting for postgres...' && nc -vz -w 2 postgres 5432 && echo 'Waiting for redis...' && nc -vz -w 2 redis 6379; do echo 'Looping forever...'; sleep 2; done;"
   containers:
+  # The backend image is distroless and runs as the rootless user uid:gid 65532:65532.
+  # It listens on the non-privileged port 3000 so the pod can run rootless.
   - name: backend
     image: docker.io/getplumber/backend:${BACKEND_IMAGE_TAG}
-    command: ["/bin/sh", "-c", "sleep 10 && ./app"]
     ports:
     - containerPort: 3000
       hostPort: 3001
@@ -137,9 +138,10 @@ spec:
         args:
         - "until echo 'Waiting for postgres...' && nc -vz -w 2 postgres 5432 && echo 'Waiting for redis...' && nc -vz -w 2 redis 6379; do echo 'Looping forever...'; sleep 2; done;"
       containers:
+      # Distroless image: invoke the binary directly with --worker (no shell available).
       - name: workers
         image: docker.io/getplumber/backend:${BACKEND_IMAGE_TAG}
-        command: ["/bin/sh", "-c", "sleep 15 && ./app --worker"]
+        args: ["--worker"]
         envFrom:
         - configMapRef:
             name: plumber-backend
