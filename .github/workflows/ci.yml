@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # v3.5
         with:
           version: 3.10.1
       - name: Install Python
@@ -34,20 +34,24 @@ jobs:
         with:
           python-version: 3.11
       - name: Install chart-testing
-        uses: helm/chart-testing-action@v2.3.1
+        uses: helm/chart-testing-action@afea100a513515fbd68b0e72a7bb0ae34cb62aec # v2.3.1
       - name: Add dependency chart repositories
         run: ./scripts/add_helm_repo.sh
       - name: List changed charts
         id: list-changed
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --target-branch "$DEFAULT_BRANCH")
           charts=$(echo "$changed" | tr '\n' ' ' | xargs)
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "changed_charts=$charts" >> $GITHUB_OUTPUT
           fi
       - name: Lint charts
-        run: ct lint --target-branch ${{ github.event.repository.default_branch }}
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: ct lint --target-branch "$DEFAULT_BRANCH"
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -58,6 +62,10 @@ jobs:
           charts: charts/plumber
           flags: --color -o test-results.xml --output-type JUnit
           helm-version: v3.10.1
+          # helm-unittest v1.1.0 (2026-05-08) switched plugin.yaml to the
+          # platformHooks/platformCommand schema, which Helm 3.10.1 cannot
+          # parse. Pin to the last v1.x release using the legacy schema.
+          unittest-version: v1.0.3
       - name: Test Report
         uses: dorny/test-reporter@dc3a92680fcc15842eef52e8c4606ea7ce6bd3f3 # v2.1.1
         if: ${{ !cancelled() }}   # run this step even if previous step failed
