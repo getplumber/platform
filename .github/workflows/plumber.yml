@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   security-events: write
+  id-token: write   # required to mint the OIDC id-token for the Plumber Score push
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
@@ -19,10 +20,12 @@ concurrency:
 
 jobs:
   plumber:
-    name: CI/CD compliance scan
+    name: Plumber
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Run Plumber
-        uses: getplumber/plumber@303ade500dee048f997bba7934dd54628bf08a3a # v0.3.74
+        uses: getplumber/plumber@4d04d1cacca6625bc0e3f08f61f16f9d0367cd27 # v0.3.76
+        with:
+          score-push: true   # publish the Plumber Score badge (repo name + score become public)
