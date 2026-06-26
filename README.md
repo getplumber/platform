@@ -1,5 +1,6 @@
 # Self-Managed Plumber
 
+[![Plumber Score](https://score.getplumber.io/github.com/getplumber/platform.svg)](https://score.getplumber.io/github.com/getplumber/platform)
 [![CI](https://github.com/getplumber/platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/getplumber/platform/actions/workflows/ci.yml)
 [![Release](https://github.com/getplumber/platform/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/getplumber/platform/actions/workflows/release.yml)
 
