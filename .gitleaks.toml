@@ -1,0 +1,37 @@
+# gitleaks configuration for the getplumber platform repo.
+#
+# Extends the built-in gitleaks ruleset and allowlists three historical
+# secrets that were committed in 2022 (commit d01b215d) and have since been
+# REVOKED. They remain in git history, so the scanner keeps flagging them;
+# allowlisting the specific revoked values clears the alerts without
+# weakening detection of any new secret.
+#
+# Scoping note: each allowlist requires BOTH a path match AND the exact
+# revoked value (condition = "AND"), so a different/real secret in these same
+# files would still be reported.
+
+title = "getplumber platform"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Revoked Kratos secrets in kratos.yml (committed 2022, rotated)"
+condition = "AND"
+paths = [
+  '''kratos\.yml$''',
+]
+regexes = [
+  '''^76339ebbf0f15102a2cdbdaf0bd2fb15ab644063345562927475696b7fe51325$''',
+  '''^cad6872f017b80106238a6ca5e8241ac8f2f3bcf$''',
+]
+
+[[allowlists]]
+description = "Revoked Stripe TEST key in local.env (committed 2022, rotated)"
+condition = "AND"
+paths = [
+  '''local\.env$''',
+]
+regexes = [
+  '''^sk_test_51KrUReAYzPPlvWexiQJ4vWbqHo1mQMItW0yqCGqqYHFN6CngK9FEEcHEL7com9VfiVODVPz6Nxrrxt5Zm72eKceJ00pCcy8nKN$''',
+]
