@@ -2,6 +2,28 @@ apiVersion: v1
 entries:
   plumber:
   - apiVersion: v2
+    appVersion: 1.4.2
+    created: "2026-07-06T18:20:01.890297135Z"
+    description: Helm chart for Plumber
+    digest: b2a25aeab08ccd75e0a48c977ca04cc0144a9622ec4406295de5677eb192e85a
+    home: https://github.com/getplumber/platform/
+    maintainers:
+    - email: bertrand@devpro.fr
+      name: devpro
+    - email: slongo@klanik.com
+      name: gemini-jtff
+    - email: thomas@getplumber.io
+      name: thomasboni
+    - email: thibaud@getplumber.io
+      name: Totara-thib
+    - email: joseph.moukarzel@jmclarity.com
+      name: Joseph94m
+    name: plumber
+    type: application
+    urls:
+    - https://github.com/getplumber/platform/releases/download/v1.4.2/plumber-1.4.2.tgz
+    version: 1.4.2
+  - apiVersion: v2
     appVersion: 1.4.1
     created: "2026-06-10T08:28:55.721664219Z"
     description: Helm chart for Plumber
@@ -528,4 +550,4 @@ entries:
     urls:
     - https://github.com/getplumber/platform/releases/download/plumber-0.1.0/plumber-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-10T08:28:55.721819422Z"
+generated: "2026-07-06T18:20:01.890443909Z"
