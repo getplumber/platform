@@ -1,0 +1,68 @@
+# Step 7 of the release-process spec (getplumber/monorepo,
+# .github/workflows/release.yml): that workflow opens a release PR against
+# THIS repo (branch release-$V) carrying an updated .env.example
+# (PLATFORM_VERSION=$V), latest.json ({"latest":"$V"}), and
+# releases/$V.md. Thomas reviews and merges that PR by hand - merging it is
+# the release approval. This workflow reacts to that merge landing on main:
+# it never opens or approves anything itself, it only turns an already
+# merged version bump into a real git tag + GitHub Release.
+#
+# Deliberately narrow trigger (paths: latest.json) so this never fires on
+# an unrelated push to main.
+name: publish release
+
+on:
+  push:
+    branches: [main]
+    paths: [latest.json]
+
+concurrency: {group: publish-release, cancel-in-progress: false}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {fetch-depth: 0}
+
+      - name: resolve version
+        id: ver
+        run: |
+          set -euo pipefail
+          V=$(jq -r '.latest' latest.json)
+          if [ -z "$V" ] || [ "$V" = "null" ]; then
+            echo "::error::latest.json has no .latest field"
+            exit 1
+          fi
+          if ! [[ "$V" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::latest.json's .latest ('$V') is not a vX.Y.Z version"
+            exit 1
+          fi
+          NOTES="releases/$V.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::$NOTES not found - the release PR that bumped latest.json to $V must also add it"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: tag + release (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.ver.outputs.version }}
+          NOTES: ${{ steps.ver.outputs.notes }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
+            echo "tag $V already exists - nothing to do (re-run or a no-op latest.json change)"
+            exit 0
+          fi
+          git config user.name "plumber-release-bot"
+          git config user.email "release@getplumber.io"
+          git tag "$V"
+          git push origin "$V"
+          gh release create "$V" --title "$V" --notes-file "$NOTES"

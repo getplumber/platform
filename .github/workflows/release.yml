@@ -26,9 +26,13 @@ jobs:
         with:
           version: 3.10.1
       - name: Add dependency chart repositories
-        run: ./scripts/add_helm_repo.sh
+        # v1's own scripts moved to legacy-v1/ 2026-08-25 (root takeover by v2) - path updated,
+        # nothing else about this script changed.
+        run: ./legacy-v1/scripts/add_helm_repo.sh
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f # v1.7.0
+        with:
+          charts_dir: legacy-v1/charts
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
