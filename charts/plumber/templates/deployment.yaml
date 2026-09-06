@@ -107,6 +107,17 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: status.hostIP
+            {{- if and (eq .name $.Values.worker.name) .taskMaxRuntime }}
+            {{- /*
+              Watchdog: the worker exits if any single task runs longer than
+              this. Opening an analysis enumerates every governed project from
+              GitLab as one task, so the limit has to exceed that enumeration or
+              the worker is killed mid-list, the task is retried, and the
+              analysis never starts. Only the worker reads it.
+            */}}
+            - name: JOBS_WORKER_TASK_MAX_RUNTIME
+              value: "{{ .taskMaxRuntime }}"
+            {{- end }}
             {{- if eq .type "backend" }}
             - name: JOBS_LISTEN_ADDR
               value: "0.0.0.0"
