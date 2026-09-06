@@ -188,6 +188,14 @@ worker:
   revisionHistoryLimit: 5
   args:
     - "--worker"
+  # -- Hard timeout for a single worker task, after which the worker exits and
+  # restarts (watchdog). Opening an analysis enumerates every governed project
+  # from GitLab as one task, so this has to be longer than that enumeration
+  # takes. On an estate of a few thousand projects it runs into several
+  # minutes, past the application default of 3m, and the symptom is an analysis
+  # that is accepted but stays at zero tasks while the worker restarts in a
+  # loop. Raise it further if your GitLab is slow or your estate is very large.
+  taskMaxRuntime: "20m"
   livenessEndpoint: "/job/health/alive"
   readinesspoint: "/job/health/ready"
   extraEnv: []
