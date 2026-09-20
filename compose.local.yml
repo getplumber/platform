@@ -1,0 +1,135 @@
+# Plumber Platform v2, local stack (no TLS). Traefik on plain HTTP publishes
+# ONE origin, http://localhost:3000, and routes /api to the backend and the
+# rest to the frontend, because the browser calls the API same-origin.
+# Use ./install.sh and pick "Local", or copy .env.example to .env yourself.
+name: "plumber-local"
+
+services:
+
+  traefik:
+    image: traefik:3.6
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "3000:80"
+    command:
+      - --log.level=INFO
+      - --entrypoints.web.address=:80
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - intranet
+
+  frontend:
+    image: docker.io/getplumber/platform-frontend:${PLATFORM_VERSION}
+    restart: unless-stopped
+    environment:
+      - API_INTERNAL_URL=http://backend:8080/api
+      - GITLAB_URL=${GITLAB_URL}
+    volumes:
+      - ./.docker/ca-certificates:/usr/local/share/ca-certificates:ro
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.front.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.front.entrypoints=web"
+      - "traefik.http.services.front.loadbalancer.server.port=3000"
+    networks:
+      - intranet
+
+  backend:
+    image: docker.io/getplumber/platform-backend:${PLATFORM_VERSION}
+    restart: unless-stopped
+    environment:
+      - PLUMBER_LISTEN_ADDR=0.0.0.0
+      - PLUMBER_LISTEN_PORT=8080
+      - PLUMBER_BASE_URL=http://localhost:3000
+      - PLUMBER_OIDC_AUDIENCE=http://localhost:3000
+      - PLUMBER_OIDC_ALLOWED_ISSUERS=${PLUMBER_OIDC_ALLOWED_ISSUERS:-${GITLAB_URL}}
+      - PLUMBER_COOKIE_SECURE=false
+      - PLUMBER_TRUST_FORWARDED_FOR=true
+      - PLUMBER_TOKEN_ENCRYPTION_KEY=${PLUMBER_TOKEN_ENCRYPTION_KEY}
+      - PLUMBER_DB_HOST=${PLUMBER_DB_HOST:-postgres}
+      - PLUMBER_DB_PORT=${PLUMBER_DB_PORT:-5432}
+      - PLUMBER_DB_USER=${PLUMBER_DB_USER:-plumber}
+      - PLUMBER_DB_PASSWORD=${PLUMBER_DB_PASSWORD}
+      - PLUMBER_DB_NAME=${PLUMBER_DB_NAME:-plumber}
+      - PLUMBER_DB_SSLMODE=${PLUMBER_DB_SSLMODE:-disable}
+      - PLUMBER_DB_TIMEZONE=${PLUMBER_DB_TIMEZONE:-UTC}
+      - PLUMBER_REDIS_URL=redis://default:${PLUMBER_REDIS_PASSWORD}@redis:6379/0
+      - PLUMBER_LOG_LEVEL=${PLUMBER_LOG_LEVEL:-info}
+      - PLUMBER_LOG_FORMAT=${PLUMBER_LOG_FORMAT:-text}
+      - PLUMBER_UPDATE_CHECK_URL=${PLUMBER_UPDATE_CHECK_URL:-}
+      - PLUMBER_PROVIDER_CA_BUNDLE=${PLUMBER_PROVIDER_CA_BUNDLE:-}
+    volumes:
+      - ./.docker/ca-certificates:/usr/local/share/ca-certificates:ro
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+    networks:
+      - intranet
+
+  redis:
+    image: redis:8.4
+    pull_policy: always
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass ${PLUMBER_REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${PLUMBER_REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    expose:
+      - "6379"
+    networks:
+      - intranet
+
+  postgres:
+    image: postgres:18
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    environment:
+      - POSTGRES_USER=${PLUMBER_DB_USER:-plumber}
+      - POSTGRES_PASSWORD=${PLUMBER_DB_PASSWORD}
+      - POSTGRES_DB=${PLUMBER_DB_NAME:-plumber}
+      - PGDATA=/var/lib/postgresql/18/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 -p 5432"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    expose:
+      - "5432"
+    networks:
+      - intranet
+
+networks:
+  intranet:
+
+volumes:
+  postgres-data:
