@@ -1,0 +1,4 @@
+tls:
+  certificates:
+    - certFile: /certs/plumber_fullchain.pem
+      keyFile: /certs/plumber_privkey.pem
