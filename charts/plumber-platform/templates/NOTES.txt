@@ -1,0 +1,42 @@
+====================================================================================================
+Plumber Platform {{ .Chart.AppVersion }} deployed (release {{ .Release.Name }}, namespace {{ .Release.Namespace }})
+====================================================================================================
+{{- if .Values.ingress.enabled }}
+
+Access: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+
+No ingress enabled. Set ingress.enabled=true and ingress.host: the browser calls the API
+same-origin under /api, so ONE host must serve both apps (this chart's ingress does that).
+{{- end }}
+{{- if gt (int .Values.backend.replicaCount) 1 }}
+
+WARNING: backend.replicaCount is {{ .Values.backend.replicaCount }}. The backend runs its job
+queues in-process; two versions running at once discard work. Keep 1 replica.
+{{- end }}
+{{- if not .Values.bootstrap.enabled }}
+
+First run: configure the GitLab connection once (bootstrap.enabled=false, manual path).
+Create a GitLab OAuth application (redirect URI {{ .Values.platform.baseUrl }}/api/v1/auth/callback,
+confidential, scope api), then:
+
+  kubectl exec -n {{ .Release.Namespace }} deploy/{{ .Values.backend.name }} -- \
+    /usr/local/bin/plumber-bootstrap -base-url https://gitlab.example.com \
+    -client-id <application-id> -client-secret <secret> -scope instance
+
+  Add -token <access-token> to store an access token in the same run, or use
+  -scope group -root-group <path> to scope to one root group. The secret is visible in the pod's
+  process list only for the duration of the command; the hook Job (bootstrap.enabled=true with a
+  Secret) avoids that.
+{{- else }}
+
+First run: the post-install Job {{ include "plumber-platform.fullname" . }}-bootstrap configures the
+GitLab connection once the backend is ready. Check it with:
+  kubectl logs -n {{ .Release.Namespace }} job/{{ include "plumber-platform.fullname" . }}-bootstrap
+{{- end }}
+
+The first GitLab account that signs in becomes the organisation Admin.
+
+Documentation: https://getplumber.io/docs
+Issues: https://github.com/getplumber/platform/issues
+====================================================================================================

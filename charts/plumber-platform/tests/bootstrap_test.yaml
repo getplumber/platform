@@ -1,0 +1,91 @@
+suite: bootstrap post-install job
+templates:
+  - job-bootstrap.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+set:
+  bootstrap.enabled: true
+  bootstrap.gitlabUrl: https://gitlab.example.com
+  bootstrap.clientId: app-id
+  bootstrap.existingSecret: bootstrap-secret
+tests:
+  - it: is absent when disabled
+    set:
+      bootstrap.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders a post-install hook job that waits for readyz then bootstraps
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Job
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: post-install
+      - equal:
+          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          value: before-hook-creation
+      - equal:
+          path: spec.backoffLimit
+          value: 0
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: curlimages/curl:8.11.1
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].args[0]
+          pattern: http://plumber-backend:8080/readyz
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/getplumber/platform-backend:v2.0.0
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["/usr/local/bin/plumber-bootstrap", "-base-url", "https://gitlab.example.com", "-client-id", "app-id", "-scope", "instance"]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_BOOTSTRAP_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: bootstrap-secret
+                key: clientSecret
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_BOOTSTRAP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: bootstrap-secret
+                key: token
+                optional: true
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_TOKEN_ENCRYPTION_KEY
+            valueFrom:
+              secretKeyRef:
+                name: plumber-plumber-platform
+                key: tokenEncryptionKey
+  - it: passes the root group for a group scope
+    set:
+      bootstrap.scope: group
+      bootstrap.rootGroup: my-company
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["/usr/local/bin/plumber-bootstrap", "-base-url", "https://gitlab.example.com", "-client-id", "app-id", "-scope", "group", "-root-group", "my-company"]
+  - it: fails on a group scope without a root group
+    set:
+      bootstrap.scope: group
+    asserts:
+      - failedTemplate:
+          errorPattern: bootstrap.rootGroup is required
+  - it: fails without the existing secret
+    set:
+      bootstrap.existingSecret: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: bootstrap.existingSecret is required

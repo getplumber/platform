@@ -1,0 +1,121 @@
+{{- if .Values.bootstrap.enabled }}
+{{- $b := .Values.bootstrap }}
+{{- $gitlab := required "bootstrap.gitlabUrl is required when bootstrap.enabled is true" $b.gitlabUrl }}
+{{- $clientId := required "bootstrap.clientId is required when bootstrap.enabled is true" $b.clientId }}
+{{- $secret := required "bootstrap.existingSecret is required when bootstrap.enabled is true (keys: clientSecret, optional token)" $b.existingSecret }}
+{{- if and (eq $b.scope "group") (not $b.rootGroup) }}
+{{- fail "bootstrap.rootGroup is required when bootstrap.scope is group" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "plumber-platform.fullname" . }}-bootstrap
+  labels:
+    app.kubernetes.io/component: bootstrap
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  annotations:
+    # First install only: plumber-bootstrap refuses an already-configured instance,
+    # so this never runs on upgrades. Re-created (not re-run) if the hook is re-triggered.
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+    {{- range $key, $val := .Values.additionalAnnotations }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bootstrap
+        {{- include "plumber-platform.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- if include "plumber-platform.caEnabled" . }}
+        # Same bundle the backend needs: an access token exchange against a
+        # privately-signed GitLab must trust it too.
+        - name: ca-bundle
+          image: {{ .Values.customCertificateAuthority.bundlerImage }}
+          command: ["sh", "-c", "cat /ca-in/*.crt /ca-in/*.pem 2>/dev/null > /ca-out/ca-bundle.pem; test -s /ca-out/ca-bundle.pem"]
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: ca-certificates
+              mountPath: /ca-in
+              readOnly: true
+            - name: ca-bundle
+              mountPath: /ca-out
+        {{- end }}
+        # Migrations run inside the backend on its first boot; wait for /readyz.
+        - name: wait-for-backend
+          image: {{ $b.waitImage }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              until curl -sf http://{{ .Values.backend.name }}:{{ .Values.backend.port }}/readyz > /dev/null; do
+                echo "waiting for the backend to be ready..."
+                sleep 5
+              done
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      containers:
+        - name: bootstrap
+          image: {{ include "plumber-platform.appImage" (dict "root" $ "app" .Values.backend) }}
+          imagePullPolicy: {{ .Values.backend.imagePullPolicy | default "IfNotPresent" }}
+          command:
+            - /usr/local/bin/plumber-bootstrap
+            - -base-url
+            - {{ $gitlab | quote }}
+            - -client-id
+            - {{ $clientId | quote }}
+            - -scope
+            - {{ $b.scope | quote }}
+            {{- if eq $b.scope "group" }}
+            - -root-group
+            - {{ $b.rootGroup | quote }}
+            {{- end }}
+          env:
+            {{- include "plumber-platform.backendEnv" . | nindent 12 }}
+            - name: PLUMBER_BOOTSTRAP_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: {{ $b.existingSecretClientSecretKey | quote }}
+            - name: PLUMBER_BOOTSTRAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: {{ $b.existingSecretTokenKey | quote }}
+                  optional: true
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if include "plumber-platform.caEnabled" . }}
+          volumeMounts:
+            - name: ca-bundle
+              mountPath: /etc/plumber/ca
+              readOnly: true
+          {{- end }}
+      {{- if include "plumber-platform.caEnabled" . }}
+      volumes:
+        {{- include "plumber-platform.caVolume" . | nindent 8 }}
+        - name: ca-bundle
+          emptyDir:
+            sizeLimit: 1Mi
+      {{- end }}
+{{- end }}
