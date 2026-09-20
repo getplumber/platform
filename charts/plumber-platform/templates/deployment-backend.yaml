@@ -1,0 +1,115 @@
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.backend.name }}
+  labels:
+    app: {{ .Values.backend.name }}
+    app.kubernetes.io/name: {{ .Values.backend.name }}
+    app.kubernetes.io/component: backend
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  revisionHistoryLimit: {{ .Values.backend.revisionHistoryLimit }}
+  # One version at a time: the single process owns the job queues; two versions
+  # running together would let an old replica claim and fail new job kinds.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.backend.name }}
+      app.kubernetes.io/name: {{ .Values.backend.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.backend.name }}
+        app.kubernetes.io/name: {{ .Values.backend.name }}
+        app.kubernetes.io/component: backend
+        {{- include "plumber-platform.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: {{ .Values.backend.automountServiceAccountToken }}
+      terminationGracePeriodSeconds: {{ .Values.backend.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.backend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if include "plumber-platform.caEnabled" . }}
+      initContainers:
+        # The backend reads ONE PEM file; concatenate whatever the operator mounted.
+        - name: ca-bundle
+          image: {{ .Values.customCertificateAuthority.bundlerImage }}
+          command: ["sh", "-c", "cat /ca-in/*.crt /ca-in/*.pem 2>/dev/null > /ca-out/ca-bundle.pem; test -s /ca-out/ca-bundle.pem"]
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: ca-certificates
+              mountPath: /ca-in
+              readOnly: true
+            - name: ca-bundle
+              mountPath: /ca-out
+      {{- end }}
+      containers:
+        - name: {{ .Values.backend.name }}
+          image: {{ include "plumber-platform.appImage" (dict "root" $ "app" .Values.backend) }}
+          imagePullPolicy: {{ .Values.backend.imagePullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.port }}
+              protocol: TCP
+          # Liveness checks nothing external; readiness is database-backed.
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: {{ .Values.backend.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.backend.startupProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          env:
+            {{- include "plumber-platform.backendEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if include "plumber-platform.caEnabled" . }}
+          volumeMounts:
+            - name: ca-bundle
+              mountPath: /etc/plumber/ca
+              readOnly: true
+          {{- end }}
+      {{- if include "plumber-platform.caEnabled" . }}
+      volumes:
+        {{- include "plumber-platform.caVolume" . | nindent 8 }}
+        - name: ca-bundle
+          emptyDir:
+            sizeLimit: 1Mi
+      {{- end }}
+{{- end }}

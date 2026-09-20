@@ -1,0 +1,196 @@
+suite: backend deployment (single process, Recreate, probes, env)
+templates:
+  - deployment-backend.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: renders one Recreate deployment named plumber-backend with one replica
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: plumber-backend
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 1200
+  - it: pins the image from tag and wires liveness to /healthz and readiness to /readyz
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/getplumber/platform-backend:v2.0.0
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+  - it: honours imageRegistry
+    set:
+      imageRegistry: registry.example.com
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: registry.example.com/getplumber/platform-backend:v2.0.0
+  - it: sets the public origin, audience and issuers from platform values
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_BASE_URL
+            value: https://plumber.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_OIDC_AUDIENCE
+            value: https://plumber.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_OIDC_ALLOWED_ISSUERS
+            value: https://gitlab.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_COOKIE_SECURE
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_TRUST_FORWARDED_FOR
+            value: "true"
+  - it: joins explicit issuers and audience
+    set:
+      platform.oidc.audience: https://aud.example.com
+      platform.oidc.allowedIssuers: [https://a.example.com, https://b.example.com]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_OIDC_AUDIENCE
+            value: https://aud.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_OIDC_ALLOWED_ISSUERS
+            value: https://a.example.com,https://b.example.com
+  - it: reads the encryption key and passwords from the chart secret by default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_TOKEN_ENCRYPTION_KEY
+            valueFrom:
+              secretKeyRef:
+                name: plumber-plumber-platform
+                key: tokenEncryptionKey
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: plumber-plumber-platform
+                key: dbPassword
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_DB_HOST
+            value: plumber-postgresql
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_REDIS_URL
+            value: redis://default:$(REDIS_PASSWORD)@plumber-redis-master:6379/0
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_REDIS_ADDR
+          any: true
+  - it: reads from existing secrets when configured
+    set:
+      platform.existingSecret: my-platform
+      platform.existingSecretKey: key
+      postgresql.global.postgresql.auth.existingSecret: my-pg
+      postgresql.global.postgresql.auth.secretKeys.userPasswordKey: pw
+      redis.auth.existingSecret: my-redis
+      redis.auth.existingSecretPasswordKey: rpw
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_TOKEN_ENCRYPTION_KEY
+            valueFrom:
+              secretKeyRef:
+                name: my-platform
+                key: key
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: my-pg
+                key: pw
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: my-redis
+                key: rpw
+  - it: builds a passwordless redis url when no redis auth is configured
+    set:
+      redis.auth.password: ""
+      redis.custom.host: redis.example.com
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_REDIS_URL
+            value: redis://redis.example.com:6379/0
+  - it: sets the update check url only when given
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_UPDATE_CHECK_URL
+          any: true
+  - it: air-gapped installs turn the update check off
+    set:
+      platform.updateCheckUrl: "off"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_UPDATE_CHECK_URL
+            value: "off"
+  - it: fails without a base url
+    set:
+      platform.baseUrl: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: platform.baseUrl is required
+  - it: renders nothing when disabled
+    set:
+      backend.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

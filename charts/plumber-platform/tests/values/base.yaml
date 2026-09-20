@@ -1,0 +1,12 @@
+platform:
+  baseUrl: https://plumber.example.com
+  gitlabUrl: https://gitlab.example.com
+  tokenEncryptionKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+postgresql:
+  global:
+    postgresql:
+      auth:
+        password: pgpass
+redis:
+  auth:
+    password: redispass

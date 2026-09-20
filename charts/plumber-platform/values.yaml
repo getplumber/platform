@@ -1,0 +1,252 @@
+# Plumber Platform v2 Helm chart values.
+# One origin is mandatory: the browser calls the API same-origin under /api, so
+# ingress.host serves BOTH apps (/api -> backend, everything else -> frontend).
+
+# -- Additional annotations applied to all resources.
+additionalAnnotations: {}
+# -- Additional labels applied to all resources.
+additionalLabels: {}
+# -- Global image registry override. When set, app images are pulled as <imageRegistry>/<imageName>:<tag>.
+imageRegistry: ""
+# -- Global image pull secrets.
+imagePullSecrets: []
+  # - name: my-registry-secret
+
+platform:
+  # -- Public origin of this install, no trailing slash (e.g. https://plumber.example.com). Required.
+  baseUrl: ""
+  # -- GitLab instance URL: frontend deep links and the default allowed OIDC issuer.
+  gitlabUrl: "https://gitlab.com"
+  oidc:
+    # -- The `aud` claim CI OIDC tokens must carry. Defaults to platform.baseUrl.
+    audience: ""
+    # -- GitLab base URLs allowed to push analysis results. Defaults to [platform.gitlabUrl].
+    allowedIssuers: []
+  # -- AES-256-GCM key sealing every stored GitLab secret: exactly 64 hex chars (openssl rand -hex 32).
+  # Inline value (dev only) OR an existing Secret below. Cannot be rotated in place: back it up.
+  tokenEncryptionKey: ""
+  # -- Existing Secret holding the key (preferred in production).
+  existingSecret: ""
+  existingSecretKey: "tokenEncryptionKey"
+  # -- Update check manifest URL. Leave empty for the default; set to "off" on air-gapped installs.
+  updateCheckUrl: ""
+  config:
+    logLevel: "info"          # debug|info|warn|error
+    logFormat: "json"         # json|text
+    sessionTTL: "168h"
+    retentionDays: 30         # floor 2
+    # -- Trust X-Forwarded-For from the ingress for per-IP rate limits. Keep true behind an ingress.
+    trustForwardedFor: true
+    # -- Extra trusted proxy CIDRs (only when the ingress hop is outside private ranges).
+    trustedProxyCidrs: []
+    # -- Mark the session cookie Secure. Keep true: the ingress terminates TLS.
+    cookieSecure: true
+
+front:
+  enabled: true
+  name: plumber-front
+  # -- Full image path (used when imageRegistry is empty).
+  image: docker.io/getplumber/platform-frontend
+  # -- Image name without registry prefix (used when imageRegistry is set).
+  imageName: getplumber/platform-frontend
+  imagePullPolicy: IfNotPresent
+  tag: v2.0.0
+  replicaCount: 1
+  revisionHistoryLimit: 5
+  port: 3000
+  extraEnv: []
+  resources: {}
+  # -- The frontend image runs as nextjs (uid:gid 1001:1001).
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  automountServiceAccountToken: false
+  serviceAccountName: ""
+  nodeSelector: {}
+  tolerations: []
+
+backend:
+  enabled: true
+  name: plumber-backend
+  image: docker.io/getplumber/platform-backend
+  imageName: getplumber/platform-backend
+  imagePullPolicy: IfNotPresent
+  tag: v2.0.0
+  # -- One process runs the API, the background workers and the schedulers, and
+  # migrates the database on boot. Keep 1 replica and the Recreate strategy: two
+  # versions must never run at once (an old replica would claim and fail new job kinds).
+  replicaCount: 1
+  revisionHistoryLimit: 5
+  port: 8080
+  # -- In-flight background work can take many minutes to drain on large estates.
+  terminationGracePeriodSeconds: 1200
+  # -- First boot runs migrations before /readyz answers; startupProbe waits up to periodSeconds*failureThreshold.
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 60
+  extraEnv: []
+  resources: {}
+  # -- Distroless image, rootless user nonroot (uid:gid 65532:65532), writes nothing to disk.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+  automountServiceAccountToken: false
+  serviceAccountName: ""
+  nodeSelector: {}
+  tolerations: []
+
+# -- First-run GitLab connection setup (plumber-bootstrap), as a post-install hook Job.
+# Off by default: the manual `kubectl exec` command is printed in NOTES.txt.
+bootstrap:
+  enabled: false
+  # -- GitLab instance base URL (e.g. https://gitlab.example.com). Required when enabled.
+  gitlabUrl: ""
+  # -- OAuth application id (redirect URI: <platform.baseUrl>/api/v1/auth/callback, scope api). Required when enabled.
+  clientId: ""
+  # -- instance | group
+  scope: "instance"
+  # -- Root group path, required with scope: group.
+  rootGroup: ""
+  # -- Existing Secret with the OAuth application secret (key clientSecret) and, optionally, an access token (key token).
+  existingSecret: ""
+  existingSecretClientSecretKey: "clientSecret"
+  existingSecretTokenKey: "token"
+  # -- Image used to wait for the backend's /readyz before bootstrapping.
+  waitImage: curlimages/curl:8.11.1
+
+ingress:
+  enabled: false
+  className: ""
+  # -- ONE host for both apps. Required when enabled.
+  host: ""
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: false
+    # -- Defaults to <release>-plumber-platform-tls.
+    secretName: ""
+
+# -- Private CA trust for GitLab (and SMTP). Same three modes as the v1 chart.
+customCertificateAuthority:
+  existingSecret: ""
+  configMapName: ""
+  certificates: []
+  # - name: rootCA.crt # Must have the .crt or .pem extension
+  #   value: |
+  #     -----BEGIN CERTIFICATE-----
+  #     (SNIPPED FOR BREVITY)
+  #     -----END CERTIFICATE-----
+  # -- Init image that concatenates the certificates into the one bundle file the backend reads.
+  bundlerImage: busybox:1.37
+
+postgresql:
+  # -- Deploy a PostgreSQL StatefulSet as part of this chart. When false, point custom.host at yours.
+  deploy: false
+  image:
+    registry: ""
+    repository: postgres
+    tag: "18"
+    digest: ""
+    pullPolicy: IfNotPresent
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  persistence:
+    size: "10Gi"
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  resources: {}
+  automountServiceAccountToken: false
+  # -- Connection details (used whether deployed by this chart or external).
+  custom:
+    # -- Defaults to <release>-postgresql when empty.
+    host: ""
+    dbName: "plumber"
+    sslmode: "disable"
+    port: 5432
+  global:
+    postgresql:
+      auth:
+        username: plumber
+        # -- Inline password (dev only) OR existingSecret.
+        password: ""
+        existingSecret: ""
+        secretKeys:
+          userPasswordKey: "password"
+
+redis:
+  # -- Deploy a Redis Deployment as part of this chart. When false, point custom.host at yours.
+  deploy: false
+  image:
+    registry: ""
+    repository: redis
+    tag: "8.4"
+    digest: ""
+    pullPolicy: IfNotPresent
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  resources: {}
+  custom:
+    # -- Defaults to <release>-redis-master when empty.
+    host: ""
+    port: 6379
+    databaseIndex: 0
+  auth:
+    # -- Inline password (dev only) OR existingSecret. URL-safe characters only (it is embedded in redis://).
+    password: ""
+    existingSecret: ""
+    existingSecretPasswordKey: "password"
