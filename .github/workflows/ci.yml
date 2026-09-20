@@ -10,69 +10,91 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  checks: write
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
-  code-analysis:
-    name: Code analysis
+  charts-lint:
+    name: Charts lint (v1 + v2)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install Helm
-        uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # v3.5
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
-          version: 3.10.1
+          version: v3.21.4
       - name: Install Python
-        uses: actions/setup-python@v4.3.0
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: "3.12"
       - name: Install chart-testing
-        uses: helm/chart-testing-action@afea100a513515fbd68b0e72a7bb0ae34cb62aec # v2.3.1
+        uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
       - name: Add dependency chart repositories
-        # v1's own scripts moved to legacy-v1/ 2026-08-25 (root takeover by v2) - path updated,
-        # nothing else about this script changed.
         run: ./legacy-v1/scripts/add_helm_repo.sh
-      - name: List changed charts
-        id: list-changed
+      # The chart version is owned by the release PR and cross-checked by publish-release.yml, so ct must not demand a bump on every chart change.
+      - name: Lint changed charts
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          changed=$(ct list-changed --target-branch "$DEFAULT_BRANCH" --chart-dirs legacy-v1/charts)
-          charts=$(echo "$changed" | tr '\n' ' ' | xargs)
-          if [[ -n "$changed" ]]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "changed_charts=$charts" >> $GITHUB_OUTPUT
-          fi
-      - name: Lint charts
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: ct lint --target-branch "$DEFAULT_BRANCH" --chart-dirs legacy-v1/charts
-  unit-tests:
-    name: Unit tests
+        run: ct lint --target-branch "$DEFAULT_BRANCH" --chart-dirs legacy-v1/charts,charts --validate-maintainers=false --check-version-increment=false
+
+  charts-unit-tests:
+    name: Charts unit tests (v1 + v2)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: d3adb5/helm-unittest-action@850bc76597579183998069830d5fa8c3ef0ea34a # 2.5.0
         with:
-          charts: legacy-v1/charts/plumber
+          charts: legacy-v1/charts/plumber charts/plumber-platform
           flags: --color -o test-results.xml --output-type JUnit
-          helm-version: v3.10.1
-          # helm-unittest v1.1.0 (2026-05-08) switched plugin.yaml to the
-          # platformHooks/platformCommand schema, which Helm 3.10.1 cannot
-          # parse. Pin to the last v1.x release using the legacy schema.
+          helm-version: v3.21.4
+          # helm-unittest v1.1.0+ switched plugin.yaml to a schema older Helm
+          # versions cannot parse; v1.0.3 is the last release on the legacy schema.
           unittest-version: v1.0.3
       - name: Test Report
         uses: dorny/test-reporter@dc3a92680fcc15842eef52e8c4606ea7ce6bd3f3 # v2.1.1
-        if: ${{ !cancelled() }}   # run this step even if previous step failed
+        if: ${{ !cancelled() }}
         with:
-          name: Helm Unit Tests   # Name of the check run which will be created
-          path: test-results.xml  # Path to test results
-          reporter: java-junit    # Format of test results
+          name: Helm Unit Tests
+          path: test-results.xml
+          reporter: java-junit
 
+  chart-v2-schema:
+    name: Chart v2 lint + kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.21.4
+      - name: Install helm-unittest and kubeconform
+        run: |
+          set -euo pipefail
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3
+          KC=v0.7.0
+          curl -sSL -o kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/$KC/kubeconform-linux-amd64.tar.gz"
+          tar xzf kubeconform.tgz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+      - run: scripts/ci/chart-check.sh
+
+  compose:
+    name: Compose config + scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/ci/compose-check.sh
+      - run: scripts/ci/scripts-check.sh
+
+  actionlint:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color

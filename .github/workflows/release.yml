@@ -1,10 +1,15 @@
-name: Release
+# v1 chart only (legacy-v1/charts/plumber, versions 1.x). The v2 chart plumber-platform is published by publish-release.yml.
+name: release v1 chart
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "legacy-v1/charts/**"
   workflow_dispatch:
+
+concurrency: {group: charts-gh-pages, cancel-in-progress: false}
 
 jobs:
   release:
@@ -14,7 +19,7 @@ jobs:
       pages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Configure Git

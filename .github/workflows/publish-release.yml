@@ -1,14 +1,13 @@
-# Step 7 of the release-process spec (getplumber/monorepo,
-# .github/workflows/release.yml): that workflow opens a release PR against
-# THIS repo (branch release-$V) carrying an updated .env.example
-# (PLATFORM_VERSION=$V), latest.json ({"latest":"$V"}), and
-# releases/$V.md. Thomas reviews and merges that PR by hand - merging it is
-# the release approval. This workflow reacts to that merge landing on main:
-# it never opens or approves anything itself, it only turns an already
-# merged version bump into a real git tag + GitHub Release.
+# The platform-repo half of a release. The monorepo's release workflow opens a PR
+# here (branch release-vX.Y.Z) that bumps, in ONE commit: versions.env
+# (PLATFORM_VERSION), charts/plumber-platform/Chart.yaml (version + appVersion),
+# charts/plumber-platform/values.yaml (both image tags), latest.json and
+# releases/vX.Y.Z.md. Thomas merges it: that merge is the release approval.
+# This workflow reacts to that merge and publishes what customers consume:
+# the git tag, the GitHub Release (notes + packaged chart) and the Helm repo
+# index on gh-pages (charts.getplumber.io). It never opens or approves anything.
 #
-# Deliberately narrow trigger (paths: latest.json) so this never fires on
-# an unrelated push to main.
+# Narrow trigger (paths: latest.json) so an unrelated push to main never fires it.
 name: publish release
 
 on:
@@ -16,7 +15,8 @@ on:
     branches: [main]
     paths: [latest.json]
 
-concurrency: {group: publish-release, cancel-in-progress: false}
+# Shared with the v1 chart-releaser workflow: both push gh-pages.
+concurrency: {group: charts-gh-pages, cancel-in-progress: false}
 
 permissions:
   contents: write
@@ -24,45 +24,97 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
         with: {fetch-depth: 0}
 
-      - name: resolve version
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with: {version: v3.21.4}
+
+      - name: resolve and cross-check the version
         id: ver
         run: |
           set -euo pipefail
           V=$(jq -r '.latest' latest.json)
           if [ -z "$V" ] || [ "$V" = "null" ]; then
-            echo "::error::latest.json has no .latest field"
-            exit 1
+            echo "::error::latest.json has no .latest field"; exit 1
           fi
           if ! [[ "$V" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::latest.json's .latest ('$V') is not a vX.Y.Z version"
-            exit 1
+            echo "::error::latest.json's .latest ('$V') is not a vX.Y.Z version"; exit 1
           fi
+          X="${V#v}"
           NOTES="releases/$V.md"
-          if [ ! -f "$NOTES" ]; then
-            echo "::error::$NOTES not found - the release PR that bumped latest.json to $V must also add it"
-            exit 1
+          [ -f "$NOTES" ] || { echo "::error::$NOTES not found - the release PR must add it"; exit 1; }
+          PIN=$(sed -n 's/^PLATFORM_VERSION=//p' versions.env)
+          [ "$PIN" = "$V" ] || { echo "::error::versions.env pins '$PIN', latest.json says '$V'"; exit 1; }
+          CV=$(yq -r '.version' charts/plumber-platform/Chart.yaml)
+          CA=$(yq -r '.appVersion' charts/plumber-platform/Chart.yaml)
+          if [ "$CV" != "$X" ] || [ "$CA" != "$X" ]; then
+            echo "::error::Chart.yaml is version '$CV' / appVersion '$CA', want '$X'"; exit 1
           fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+          FT=$(yq -r '.front.tag' charts/plumber-platform/values.yaml)
+          BT=$(yq -r '.backend.tag' charts/plumber-platform/values.yaml)
+          if [ "$FT" != "$V" ] || [ "$BT" != "$V" ]; then
+            echo "::error::values.yaml tags are front '$FT' / backend '$BT', want '$V'"; exit 1
+          fi
+          {
+            echo "version=$V"
+            echo "chart_version=$X"
+            echo "notes=$NOTES"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: tag + release (idempotent)
+      - name: tag + github release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.ver.outputs.version }}
           NOTES: ${{ steps.ver.outputs.notes }}
         run: |
           set -euo pipefail
-          if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
-            echo "tag $V already exists - nothing to do (re-run or a no-op latest.json change)"
-            exit 0
-          fi
           git config user.name "plumber-release-bot"
           git config user.email "release@getplumber.io"
-          git tag "$V"
-          git push origin "$V"
-          gh release create "$V" --title "$V" --notes-file "$NOTES"
+          if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
+            echo "tag $V already exists - keeping it"
+          else
+            git tag "$V"
+            git push origin "$V"
+          fi
+          if gh release view "$V" >/dev/null 2>&1; then
+            echo "release $V already exists - keeping it"
+          else
+            gh release create "$V" --title "$V" --notes-file "$NOTES"
+          fi
+
+      - name: package the chart and attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.ver.outputs.version }}
+          X: ${{ steps.ver.outputs.chart_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p .cr-release-packages
+          helm package charts/plumber-platform -d .cr-release-packages
+          test -f ".cr-release-packages/plumber-platform-$X.tgz"
+          gh release upload "$V" ".cr-release-packages/plumber-platform-$X.tgz" --clobber
+
+      - name: update the helm repo index on gh-pages
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          git worktree add /tmp/gh-pages origin/gh-pages
+          # helm repo index merges the new package entry (download URL = the release asset)
+          # into the existing index, which also lists the v1 `plumber` chart.
+          helm repo index .cr-release-packages \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/$V" \
+            --merge /tmp/gh-pages/index.yaml
+          cp .cr-release-packages/index.yaml /tmp/gh-pages/index.yaml
+          cd /tmp/gh-pages
+          [ -f CNAME ] || echo "charts.getplumber.io" > CNAME
+          git add index.yaml CNAME
+          if git diff --cached --quiet; then
+            echo "index.yaml unchanged - nothing to push"
+          else
+            git commit -m "Update index.yaml for plumber-platform $V"
+            git push origin HEAD:gh-pages
+          fi
