@@ -1,0 +1,56 @@
+suite: bundled redis
+templates:
+  - deployment-redis.yaml
+  - service-redis.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: is absent by default
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders the deployment with requirepass from the chart secret
+    template: deployment-redis.yaml
+    set:
+      redis.deploy: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: plumber-redis-master
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: redis:8.4
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)"]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: plumber-plumber-platform
+                key: redisPassword
+  - it: runs without a password when none is configured
+    template: deployment-redis.yaml
+    set:
+      redis.deploy: true
+      redis.auth.password: ""
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].command
+  - it: renders the service on 6379
+    template: service-redis.yaml
+    set:
+      redis.deploy: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: plumber-redis-master
+      - equal:
+          path: spec.ports[0].port
+          value: 6379

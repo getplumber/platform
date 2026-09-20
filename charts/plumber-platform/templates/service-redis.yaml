@@ -1,0 +1,21 @@
+{{- if .Values.redis.deploy }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-redis-master" .Release.Name }}
+  labels:
+    app: {{ printf "%s-redis-master" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ printf "%s-redis-master" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+{{- end }}

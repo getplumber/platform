@@ -1,0 +1,106 @@
+suite: custom certificate authority
+templates:
+  - configmap-ca.yaml
+  - deployment-backend.yaml
+  - deployment-frontend.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: renders no configmap and no ca volume when unconfigured
+    template: configmap-ca.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders the configmap from inline certificates with the default name
+    template: configmap-ca.yaml
+    set:
+      customCertificateAuthority.certificates:
+        - name: root.crt
+          value: |
+            MY SUPER CERTIFICATE
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: plumber-ca-certificates
+      - equal:
+          path: data["root.crt"]
+          value: |
+            MY SUPER CERTIFICATE
+  - it: names the configmap from configMapName
+    template: configmap-ca.yaml
+    set:
+      customCertificateAuthority.configMapName: custom-name
+      customCertificateAuthority.certificates:
+        - name: root.crt
+          value: X
+    asserts:
+      - equal:
+          path: metadata.name
+          value: custom-name
+  - it: backend binds an existing secret, builds the bundle and points the backend at it
+    template: deployment-backend.yaml
+    set:
+      customCertificateAuthority.existingSecret: my-ca-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certificates
+            secret:
+              secretName: my-ca-secret
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: ca-bundle
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_PROVIDER_CA_BUNDLE
+            value: /etc/plumber/ca/ca-bundle.pem
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ca-bundle
+            mountPath: /etc/plumber/ca
+            readOnly: true
+  - it: backend binds the generated configmap when certificates are inline
+    template: deployment-backend.yaml
+    set:
+      customCertificateAuthority.certificates:
+        - name: root.crt
+          value: X
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certificates
+            configMap:
+              name: plumber-ca-certificates
+  - it: backend has no init container, no bundle env and no volumes without a CA
+    template: deployment-backend.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.initContainers
+      - notExists:
+          path: spec.template.spec.volumes
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_PROVIDER_CA_BUNDLE
+          any: true
+  - it: frontend binds the same source
+    template: deployment-frontend.yaml
+    set:
+      customCertificateAuthority.existingSecret: my-ca-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certificates
+            secret:
+              secretName: my-ca-secret

@@ -1,0 +1,86 @@
+suite: bundled postgresql
+templates:
+  - statefulset-postgresql.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: is absent by default
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: renders a headless service and a statefulset mounting /var/lib/postgresql
+    set:
+      postgresql.deploy: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - isKind:
+          of: Service
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: plumber-postgresql
+        documentIndex: 0
+      - equal:
+          path: spec.clusterIP
+          value: None
+        documentIndex: 0
+      - isKind:
+          of: StatefulSet
+        documentIndex: 1
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: postgres:18
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: data
+            mountPath: /var/lib/postgresql
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: plumber-plumber-platform
+                key: dbPassword
+        documentIndex: 1
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 10Gi
+        documentIndex: 1
+  - it: builds the image ref with registry and digest
+    set:
+      postgresql.deploy: true
+      postgresql.image.registry: mirror.example.com
+      postgresql.image.digest: sha256:abc
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: mirror.example.com/postgres:18@sha256:abc
+        documentIndex: 1
+  - it: reads the password from an existing secret
+    set:
+      postgresql.deploy: true
+      postgresql.global.postgresql.auth.existingSecret: pg
+      postgresql.global.postgresql.auth.secretKeys.userPasswordKey: pw
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: pg
+                key: pw
+        documentIndex: 1

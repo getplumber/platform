@@ -1,0 +1,13 @@
+{{- if .Values.customCertificateAuthority.certificates }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.customCertificateAuthority.configMapName | default "plumber-ca-certificates" }}
+  labels:
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+data:
+  {{- range .Values.customCertificateAuthority.certificates }}
+  {{ .name }}: {{ .value | quote }}
+  {{- end }}
+{{- end }}

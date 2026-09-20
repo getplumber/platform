@@ -1,0 +1,65 @@
+{{- if .Values.redis.deploy }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-redis-master" .Release.Name }}
+  labels:
+    app: {{ printf "%s-redis-master" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ printf "%s-redis-master" .Release.Name }}
+      app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ printf "%s-redis-master" .Release.Name }}
+        app.kubernetes.io/name: {{ printf "%s-redis-master" .Release.Name }}
+        {{- include "plumber-platform.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: {{ include "plumber-platform.depImage" .Values.redis.image }}
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          {{- if include "plumber-platform.redisAuthEnabled" . }}
+          command: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "plumber-platform.redisSecretName" . | quote }}
+                  key: {{ include "plumber-platform.redisSecretKey" . | quote }}
+          {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          {{- with .Values.redis.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

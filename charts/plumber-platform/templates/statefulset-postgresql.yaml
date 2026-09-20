@@ -1,0 +1,105 @@
+{{- if .Values.postgresql.deploy }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-postgresql" .Release.Name }}
+  labels:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  clusterIP: None
+  selector:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-postgresql" .Release.Name }}
+  labels:
+    app: {{ printf "%s-postgresql" .Release.Name }}
+    app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  replicas: 1
+  serviceName: {{ printf "%s-postgresql" .Release.Name }}
+  selector:
+    matchLabels:
+      app: {{ printf "%s-postgresql" .Release.Name }}
+      app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ printf "%s-postgresql" .Release.Name }}
+        app.kubernetes.io/name: {{ printf "%s-postgresql" .Release.Name }}
+        {{- include "plumber-platform.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: {{ .Values.postgresql.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.postgresql.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgresql
+          image: {{ include "plumber-platform.depImage" .Values.postgresql.image }}
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.custom.dbName | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.global.postgresql.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "plumber-platform.dbSecretName" . | quote }}
+                  key: {{ include "plumber-platform.dbSecretKey" . | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          {{- with .Values.postgresql.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [{{ .Values.postgresql.persistence.accessMode | quote }}]
+        {{- with .Values.postgresql.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size | quote }}
+{{- end }}
