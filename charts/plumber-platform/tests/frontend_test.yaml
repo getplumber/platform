@@ -1,0 +1,77 @@
+suite: frontend deployment
+templates:
+  - deployment-frontend.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: renders plumber-front with the pinned image and a writable /tmp
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: plumber-front
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/getplumber/platform-frontend:v2.0.0
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tmp
+            emptyDir: {}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tmp
+            mountPath: /tmp
+  - it: talks to the backend service server-side and knows the gitlab url
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: API_INTERNAL_URL
+            value: http://plumber-backend:8080/api
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GITLAB_URL
+            value: https://gitlab.example.com
+  - it: probes GET / on the http port
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: http
+  - it: mounts the ca-certificates directory when a custom CA is configured
+    set:
+      customCertificateAuthority.configMapName: my-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ca-certificates
+            mountPath: /usr/local/share/ca-certificates
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certificates
+            configMap:
+              name: my-ca
+  - it: has no ca mount without a custom CA
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca-certificates
+          any: true
+  - it: renders nothing when disabled
+    set:
+      front.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

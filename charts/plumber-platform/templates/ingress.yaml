@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "plumber-platform.fullname" . }}
+  labels:
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- if or .Values.ingress.annotations .Values.additionalAnnotations }}
+  annotations:
+    {{- range $key, $val := .Values.ingress.annotations }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    {{- range $key, $val := .Values.additionalAnnotations }}
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ required "ingress.host is required when ingress.enabled is true" .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "plumber-platform.fullname" .)) }}
+  {{- end }}
+  rules:
+    # One origin: the browser calls /api same-origin, so both apps share the host.
+    - host: {{ required "ingress.host is required when ingress.enabled is true" .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- if .Values.backend.enabled }}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.backend.name }}
+                port:
+                  number: {{ .Values.backend.port }}
+          {{- end }}
+          {{- if .Values.front.enabled }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.front.name }}
+                port:
+                  number: {{ .Values.front.port }}
+          {{- end }}
+{{- end }}

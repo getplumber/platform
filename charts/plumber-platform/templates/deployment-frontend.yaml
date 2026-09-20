@@ -1,0 +1,96 @@
+{{- if .Values.front.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.front.name }}
+  labels:
+    app: {{ .Values.front.name }}
+    app.kubernetes.io/name: {{ .Values.front.name }}
+    app.kubernetes.io/component: frontend
+    {{- include "plumber-platform.labels" . | nindent 4 }}
+  {{- include "plumber-platform.annotations" . | nindent 2 }}
+spec:
+  replicas: {{ .Values.front.replicaCount }}
+  revisionHistoryLimit: {{ .Values.front.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ .Values.front.name }}
+      app.kubernetes.io/name: {{ .Values.front.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.front.name }}
+        app.kubernetes.io/name: {{ .Values.front.name }}
+        app.kubernetes.io/component: frontend
+        {{- include "plumber-platform.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: {{ .Values.front.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.front.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.front.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.front.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.front.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Values.front.name }}
+          image: {{ include "plumber-platform.appImage" (dict "root" $ "app" .Values.front) }}
+          imagePullPolicy: {{ .Values.front.imagePullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.front.port }}
+              protocol: TCP
+          # No dedicated health route: GET / answers 200 or a 307 to /login, both healthy.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          env:
+            # Server-side rendering reaches the backend inside the cluster.
+            - name: API_INTERNAL_URL
+              value: {{ printf "http://%s:%v/api" .Values.backend.name .Values.backend.port | quote }}
+            - name: GITLAB_URL
+              value: {{ .Values.platform.gitlabUrl | quote }}
+            {{- with .Values.front.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.front.resources | nindent 12 }}
+          {{- with .Values.front.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # The image entrypoint writes the CA bundle it builds under /tmp.
+            - name: tmp
+              mountPath: /tmp
+            {{- if include "plumber-platform.caEnabled" . }}
+            - name: ca-certificates
+              mountPath: /usr/local/share/ca-certificates
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if include "plumber-platform.caEnabled" . }}
+        {{- include "plumber-platform.caVolume" . | nindent 8 }}
+        {{- end }}
+{{- end }}

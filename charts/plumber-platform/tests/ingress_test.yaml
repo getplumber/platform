@@ -1,0 +1,78 @@
+suite: single-host ingress
+templates:
+  - ingress.yaml
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+tests:
+  - it: is absent by default
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: routes /api to the backend and / to the frontend on one host
+    set:
+      ingress.enabled: true
+      ingress.host: plumber.example.com
+      ingress.className: nginx
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - equal:
+          path: spec.rules[0].host
+          value: plumber.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /api
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: plumber-backend
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.port.number
+          value: 8080
+      - equal:
+          path: spec.rules[0].http.paths[1].path
+          value: /
+      - equal:
+          path: spec.rules[0].http.paths[1].backend.service.name
+          value: plumber-front
+      - notExists:
+          path: spec.tls
+  - it: adds tls with a default secret name
+    set:
+      ingress.enabled: true
+      ingress.host: plumber.example.com
+      ingress.tls.enabled: true
+    asserts:
+      - equal:
+          path: spec.tls[0].secretName
+          value: plumber-plumber-platform-tls
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: plumber.example.com
+  - it: merges ingress and additional annotations
+    set:
+      ingress.enabled: true
+      ingress.host: plumber.example.com
+      ingress.annotations:
+        cert-manager.io/cluster-issuer: letsencrypt
+      additionalAnnotations:
+        team: platform
+    asserts:
+      - equal:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]
+          value: letsencrypt
+      - equal:
+          path: metadata.annotations.team
+          value: platform
+  - it: fails without a host
+    set:
+      ingress.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: ingress.host is required
