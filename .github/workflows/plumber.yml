@@ -24,11 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@v5.0.0
         with:
           persist-credentials: false
       - name: Run Plumber
-        uses: getplumber/plumber@ebc213aa45dccd233ce5c2630f0aafa8e8d650c5 # pinned plumber version: v0.7.18
+        uses: getplumber/plumber@v0.7.18
         with:
           min-points: 90
           score-push: true   # publish the Plumber Score badge (repo name + score become public)
