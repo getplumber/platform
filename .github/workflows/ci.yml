@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Helm
-        uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # v3.5
+        uses: azure/setup-helm@v3.5
         with:
           version: 3.10.1
       - name: Install Python
@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: 3.11
       - name: Install chart-testing
-        uses: helm/chart-testing-action@afea100a513515fbd68b0e72a7bb0ae34cb62aec # v2.3.1
+        uses: helm/chart-testing-action@v2.3.1
       - name: Add dependency chart repositories
         run: ./scripts/add_helm_repo.sh
       - name: List changed charts
@@ -56,8 +56,8 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: d3adb5/helm-unittest-action@850bc76597579183998069830d5fa8c3ef0ea34a # 2.5.0
+      - uses: actions/checkout@v3.7.0
+      - uses: d3adb5/helm-unittest-action@v2.5.0
         with:
           charts: charts/plumber
           flags: --color -o test-results.xml --output-type JUnit
@@ -67,7 +67,7 @@ jobs:
           # parse. Pin to the last v1.x release using the legacy schema.
           unittest-version: v1.0.3
       - name: Test Report
-        uses: dorny/test-reporter@dc3a92680fcc15842eef52e8c4606ea7ce6bd3f3 # v2.1.1
+        uses: dorny/test-reporter@v2.1.1
         if: ${{ !cancelled() }}   # run this step even if previous step failed
         with:
           name: Helm Unit Tests   # Name of the check run which will be created
