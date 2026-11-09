@@ -1,5 +1,10 @@
 # Self-Managed Plumber
 
+> [!WARNING]
+> **This repository is deprecated and archived.** It holds the v1 line of the self-managed Plumber Platform and receives no further updates, fixes or releases.
+>
+> Use **[getplumber/plumber-platform](https://github.com/getplumber/plumber-platform)** instead: the v2 line, with the Docker Compose and Helm chart installations. The v1 to v2 migration is described in its documentation.
+
 [![Plumber Score](https://score.getplumber.io/github.com/getplumber/platform.svg)](https://score.getplumber.io/github.com/getplumber/platform)
 [![CI](https://github.com/getplumber/platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/getplumber/platform/actions/workflows/ci.yml)
 [![Release](https://github.com/getplumber/platform/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/getplumber/platform/actions/workflows/release.yml)
