@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v3.7.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Configure Git
         run: |
           git config user.name "$GITHUB_ACTOR"
@@ -33,7 +34,12 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
       - name: Add CNAME to gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # The checkout persists no credential (ISSUE-307): gh wires git's
+          # credential helper to GH_TOKEN for the push below.
+          gh auth setup-git
           if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
             git checkout gh-pages
             if [ ! -f CNAME ]; then

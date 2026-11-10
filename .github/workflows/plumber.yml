@@ -28,7 +28,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run Plumber
-        uses: getplumber/plumber@v0.7.18
+        uses: getplumber/plumber@v0.7.23
         with:
           min-points: 90
           score-push: true   # publish the Plumber Score badge (repo name + score become public)
